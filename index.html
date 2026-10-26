@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#354c40"><meta name="description" content="오늘의 감정을 소리와 작은 방으로 남기는 로컬 음악 일기장. 로키의 음악일기.">
+  <meta property="og:title" content="로키의 음악일기"><meta property="og:description" content="소리로 쓰는 나의 하루. 오늘의 감정과 방의 분위기를 음악 일기로 남겨보세요.">
+  <meta property="og:url" content="https://mcroky.github.io/music-diary/"><meta property="og:image" content="https://mcroky.github.io/music-diary/assets/rooms/attic.webp"><meta property="og:type" content="website">
+  <link rel="canonical" href="https://mcroky.github.io/music-diary/">
+  <title>로키의 음악일기 · 소리로 쓰는 나의 하루</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml"><link rel="manifest" href="./manifest.webmanifest"><link rel="stylesheet" href="./styles.css"><link rel="stylesheet" href="./room-art.css"><link rel="preload" as="image" href="./assets/rooms/attic.webp">
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="./"><img src="./icon.svg" width="38" height="38" alt=""><span><strong data-i18n="brand"></strong><small data-i18n="subtitle"></small></span></a>
+  <nav class="main-nav"><button class="nav-active" id="todayNav" data-i18n="today"></button><button id="calendarNav"><span aria-hidden="true">▦</span> <span data-i18n="calendar"></span></button></nav>
+  <label class="language"><span aria-hidden="true">◎</span><select id="language" aria-label="Language"><option value="ko">한국어</option><option value="en">English</option><option value="ja">日本語</option><option value="zh">简体中文</option></select></label>
+</header>
+<main>
+  <div class="utility"><a href="https://mcroky.github.io/roky-studio/" data-i18n="back"></a><span><i></i><span data-i18n="private"></span></span></div>
+  <section class="intro"><div><p class="eyebrow" data-i18n="eyebrow"></p><h1 data-i18n="headline"></h1><p class="intro-copy" data-i18n="intro"></p></div><div class="date-stamp"><span id="stampMonth"></span><strong id="stampDay"></strong><span id="stampWeekday"></span></div></section>
+  <section id="draftBanner" class="draft-recovery" hidden aria-labelledby="draftBannerHeading"><div><h2 id="draftBannerHeading" data-i18n="draftBannerTitle"></h2><p><span data-i18n="savedDrafts"></span> <span id="draftCount"></span> · <span id="draftLatestTitle"></span></p></div><button id="resumeLatestDraft" class="primary-button" data-i18n="resumeDraft"></button><button id="bannerDrafts" class="text-button" data-i18n="draftManager"></button></section>
+  <section class="mood-strip" aria-labelledby="moodHeading"><div><h2 id="moodHeading" data-i18n="moodTitle"></h2><p data-i18n="moodHelp"></p></div><div id="moodButtons" class="mood-buttons"></div><button id="suggest" class="text-button" data-i18n="suggest"></button></section>
+  <section class="studio" aria-labelledby="roomHeading">
+    <div class="room-panel">
+      <div class="room-label"><span class="live-dot"></span><span id="roomDescription"></span><span class="room-edition">ROOM Nº 01</span></div>
+      <div id="roomScene" class="room-scene" data-status="loading" data-room="attic" data-time="sunset" data-weather="rainy" data-light="warm">
+        <img id="roomImage" class="painted-room" alt="" width="1536" height="1024" decoding="async" fetchpriority="high">
+        <div class="scene-hour-wash" aria-hidden="true"></div>
+        <svg class="scene-atmosphere" viewBox="0 0 1536 1024" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <clipPath id="paintedWindow"><path id="paintedWindowPath" clip-rule="evenodd" fill-rule="evenodd"></path></clipPath>
+            <linearGradient id="paintedNight" x2="0" y2="1"><stop stop-color="#081b30"/><stop offset="1" stop-color="#2f4b62"/></linearGradient>
+            <linearGradient id="paintedFog" x2="0" y2="1"><stop stop-color="#d6dcd6" stop-opacity=".55"/><stop offset="1" stop-color="#e6e5d8"/></linearGradient>
+            <pattern id="paintedRain" width="92" height="180" patternUnits="userSpaceOnUse"><path d="m20-20-13 50m65-8-14 55m-19 40-10 42m54-6-12 48" fill="none" stroke="#e9eee9" stroke-width="1.5" opacity=".62"/><ellipse cx="44" cy="76" rx="1.8" ry="4" fill="#dfe7e3" opacity=".4"/></pattern>
+            <pattern id="paintedSnow" width="180" height="220" patternUnits="userSpaceOnUse"><g fill="#fcfff6"><circle cx="23" cy="31" r="2.3"/><circle cx="122" cy="85" r="3.3"/><circle cx="63" cy="176" r="2.7"/><circle cx="165" cy="205" r="1.9"/></g></pattern>
+            <pattern id="paintedStars" width="190" height="155" patternUnits="userSpaceOnUse"><g fill="#f7e8c1"><circle cx="31" cy="31" r="1.3"/><circle cx="129" cy="78" r="1.7"/><circle cx="78" cy="122" r="1"/></g></pattern>
+          </defs>
+          <g clip-path="url(#paintedWindow)"><rect class="window-night" width="1536" height="1024" fill="url(#paintedNight)"/><rect id="paintedStarField" class="window-stars" width="1536" height="350" fill="url(#paintedStars)"/><circle id="paintedMoon" class="window-moon" r="18" fill="#f4e7c3"/><rect class="window-cloud" width="1536" height="1024" fill="#536c7d"/><rect class="window-fog" width="1536" height="1024" fill="url(#paintedFog)"/><g class="window-rain"><rect class="rain-sheet" y="-180" width="1536" height="1384" fill="url(#paintedRain)"/></g><g class="window-snow"><rect class="snow-sheet" y="-220" width="1536" height="1464" fill="url(#paintedSnow)"/></g></g>
+        </svg>
+        <div class="scene-lamp-wash" aria-hidden="true"></div><div class="scene-vignette" aria-hidden="true"></div>
+        <div class="scene-topline"><span class="scene-quiet">a room for your heart.</span><button id="enterImmersion" class="immerse-button"><span aria-hidden="true">⛶</span><span data-i18n="enterImmersion"></span></button></div>
+        <div id="sceneStatus" class="scene-status" role="status"><span id="sceneStatusText"></span><button id="retryScene" data-i18n="retryScene" hidden></button></div>
+        <svg class="room-art room-fallback" viewBox="0 0 800 510" role="img" aria-labelledby="sceneTitle">
+          <title id="sceneTitle"></title>
+          <defs>
+            <linearGradient id="wall" x2="0" y2="1"><stop stop-color="var(--wall-top)"/><stop offset="1" stop-color="var(--wall-bottom)"/></linearGradient>
+            <linearGradient id="sky" x2="0" y2="1"><stop stop-color="var(--sky-top)"/><stop offset="1" stop-color="var(--sky-bottom)"/></linearGradient>
+            <linearGradient id="wood" x2="1" y2="1"><stop stop-color="#ad805c"/><stop offset="1" stop-color="#6c4f3b"/></linearGradient>
+            <linearGradient id="sofa" x2="0" y2="1"><stop stop-color="var(--sofa-top)"/><stop offset="1" stop-color="var(--sofa-bottom)"/></linearGradient>
+            <radialGradient id="glow"><stop stop-color="var(--lamp-color)" stop-opacity=".4"/><stop offset="1" stop-color="var(--lamp-color)" stop-opacity="0"/></radialGradient>
+            <pattern id="planks" width="90" height="40" patternUnits="userSpaceOnUse" patternTransform="skewX(-32)"><rect width="90" height="40" fill="#bca48b"/><path d="M0 0h90v40M5 8h59M12 31h35" fill="none" stroke="#a68b70" stroke-width="1" opacity=".55"/></pattern>
+            <clipPath id="windowClip"><rect x="308" y="74" width="227" height="227" rx="80"/></clipPath>
+            <filter id="shadow"><feGaussianBlur stdDeviation="10"/></filter>
+          </defs>
+          <rect width="800" height="510" fill="url(#wall)"/>
+          <path d="M0 0h800v48L400 0 0 140Z" fill="#40352b" opacity=".11"/>
+          <path class="attic-beams" d="M0 15 405 0 800 145M45 0 45 360M735 98v268" fill="none" stroke="#71523b" stroke-width="17" opacity=".45"/>
+          <path class="cabin-lines" d="M0 55h800M0 110h800M0 165h800M0 220h800M0 275h800M0 330h800" stroke="#987354" opacity=".22" stroke-width="3"/>
+          <path d="M0 358 800 358 800 510 0 510Z" fill="url(#planks)"/><path d="M0 356h800" stroke="#877661" stroke-width="7"/>
+          <rect x="296" y="62" width="251" height="251" rx="93" fill="#6d5b49"/><rect x="303" y="69" width="237" height="237" rx="86" fill="#cfb89b"/>
+          <g clip-path="url(#windowClip)">
+            <rect x="308" y="74" width="227" height="227" fill="url(#sky)"/>
+            <circle class="sun" cx="473" cy="140" r="32" fill="#f4dba0" opacity=".9"/>
+            <g class="stars" fill="#f8edcf"><circle cx="342" cy="115" r="2"/><circle cx="432" cy="93" r="1.6"/><circle cx="498" cy="180" r="2"/><circle cx="391" cy="148" r="1.5"/></g>
+            <path d="M300 240 340 180 368 207 424 172 483 219 550 183V310H300" fill="#81958d" opacity=".65"/>
+            <path d="M300 268 360 231 400 248 470 220 550 260V310H300" fill="#526b62" opacity=".7"/>
+            <g class="sea-view"><rect x="300" y="226" width="250" height="85" fill="#739d9e"/><path d="M300 245q30-8 60 0t60 0t60 0t60 0M300 268q40-8 80 0t80 0t80 0M300 290q30-6 60 0t60 0t60 0t60 0" fill="none" stroke="#c1d3c7" stroke-width="2"/></g>
+            <g class="rain-lines" stroke="#dce8e7" stroke-width="1.5" opacity=".5"><path d="m325 80-18 52m60-56-21 64m58-45-25 70m77-90-32 95m80-60-32 97m-123-26-27 82m77-68-25 76m74-51-22 62m69-63-20 65"/></g>
+            <g class="snowflakes" fill="#fff" opacity=".9"><circle cx="330" cy="110" r="3"/><circle cx="390" cy="130" r="4"/><circle cx="485" cy="100" r="3"/><circle cx="450" cy="190" r="4"/><circle cx="350" cy="220" r="3"/><circle cx="500" cy="250" r="4"/><circle cx="415" cy="270" r="3"/></g>
+            <rect class="fog" x="300" y="70" width="250" height="250" fill="#d8dcda" opacity=".6"/>
+          </g>
+          <path d="M421 75v226M310 207h225" stroke="#b49b7d" stroke-width="8"/><path d="M299 309h245" stroke="#816b51" stroke-width="9" stroke-linecap="round"/>
+          <path d="M277 64q-18 102-12 245h29q-18-100-1-245M553 64q24 113 17 245h-26q18-98-5-245" fill="#e2d7c2" opacity=".6"/>
+          <rect x="95" y="108" width="100" height="127" rx="2" fill="#8c7256"/><rect x="102" y="115" width="86" height="113" fill="#ede6d7"/><circle cx="145" cy="155" r="22" fill="#bb8b60"/><path d="m111 213 30-45 36 45" fill="#6b806d"/><path d="M109 218h70" stroke="#c0b59a"/>
+          <g class="desk-art"><rect x="590" y="101" width="92" height="62" fill="#5b6050"/><rect x="597" y="108" width="78" height="48" fill="#c5bb9b"/><path d="M603 145q20-45 35 0t30-10" fill="none" stroke="#637c69" stroke-width="2"/></g>
+          <ellipse cx="360" cy="445" rx="267" ry="40" fill="#4f4837" opacity=".18" filter="url(#shadow)"/>
+          <ellipse cx="364" cy="443" rx="233" ry="45" fill="#dbccab"/><ellipse cx="364" cy="443" rx="220" ry="36" fill="none" stroke="#c7b58e" stroke-width="2" stroke-dasharray="3 5"/>
+          <g class="couch"><path d="m107 404-3 31m185-31 6 31" stroke="#68543f" stroke-width="9"/><rect x="100" y="281" width="207" height="113" rx="24" fill="url(#sofa)"/><rect x="91" y="348" width="223" height="62" rx="17" fill="var(--sofa-bottom)"/><rect x="107" y="341" width="92" height="42" rx="11" fill="var(--sofa-top)"/><rect x="203" y="341" width="93" height="42" rx="11" fill="var(--sofa-top)"/><rect x="83" y="326" width="32" height="77" rx="13" fill="var(--sofa-bottom)"/><rect x="290" y="326" width="32" height="77" rx="13" fill="var(--sofa-bottom)"/><rect x="124" y="297" width="52" height="47" rx="8" fill="#bfa67c" transform="rotate(-13 150 320)"/><path d="M240 309q-20 39-10 84l39 10q-10-45 8-91" fill="#d8c7ae"/><path d="m240 320 31 6m-34 6 31 6m-33 7 30 7m-31 7 30 7m-30 7 31 7" stroke="#bdac93" stroke-width="2"/></g>
+          <g class="bed-art"><rect x="88" y="310" width="232" height="100" rx="12" fill="#87725b"/><path d="M92 330h224v70H92" fill="#e7dbc5"/><rect x="105" y="309" width="78" height="39" rx="10" fill="#f2ead9"/><path d="M198 328h118v72H198" fill="#a6b29a"/><path d="M220 332v65m24-65v65m24-65v65m24-65v65" stroke="#8f9d82" stroke-width="2"/></g>
+          <g><path d="m497 336-8 99m164-99 10 99" stroke="#71523b" stroke-width="12"/><path d="M470 316h204v24H470" fill="url(#wood)"/><path d="M480 313h184" stroke="#d4b08a" stroke-width="7"/><rect x="501" y="281" width="101" height="32" rx="5" fill="#645443"/><rect x="507" y="278" width="89" height="15" rx="3" fill="#ba9672"/><ellipse cx="550" cy="284" rx="30" ry="10" fill="#303830"/><ellipse cx="550" cy="284" rx="11" ry="4" fill="#c2a877"/><path d="m586 282-13 8-13-2" fill="none" stroke="#dbd4bd" stroke-width="2"/><circle cx="590" cy="302" r="3" fill="#d1ba81"/>
+          <rect x="610" y="284" width="26" height="29" rx="4" fill="#e8dfcd"/><path d="M636 290q16-2 9 14h-9" fill="none" stroke="#e8dfcd" stroke-width="4"/><path class="steam" d="M620 278q-6-9 1-17m8 16q-6-7 0-13" stroke="#f7f3e7" opacity=".65" fill="none" stroke-width="2"/></g>
+          <g><ellipse cx="386" cy="430" rx="53" ry="14" fill="#7d6044"/><path d="m345 429-9 36m84-36 10 36" stroke="#6a4c35" stroke-width="6"/><ellipse cx="386" cy="426" rx="54" ry="15" fill="#bd9670"/><path d="m365 415 30-4 18 12-30 4Z" fill="#e9e1c9"/><path d="m381 414 15-2 12 9-15 2Z" fill="#b5bea5"/></g>
+          <g><path d="M717 337h44l-8 54h-29Z" fill="#b18b66"/><ellipse cx="739" cy="338" rx="22" ry="7" fill="#806448"/><path d="M739 338V227m0 89q-45-3-46-34 35-5 46 34m0-38q42-5 40-36-32-2-40 36m0-24q-34-9-29-35 28 4 29 35m0-10q25-16 18-42-24 8-18 42" fill="#60785b" stroke="#50674c" stroke-width="3"/></g>
+          <g class="lamp"><ellipse cx="670" cy="399" rx="24" ry="6" fill="#62563e"/><path d="M670 393V222" stroke="#6d624a" stroke-width="5"/><path d="m646 201-16 42h80l-17-42Z" fill="var(--lamp-color)"/><ellipse cx="670" cy="243" rx="40" ry="6" fill="var(--lamp-color)"/><ellipse class="lamp-glow" cx="660" cy="280" rx="150" ry="170" fill="url(#glow)"/></g>
+          <rect class="night-tint" width="800" height="510" fill="#102329" opacity=".2" pointer-events="none"/>
+          <path d="M0 0h800v510H0Z" fill="none" stroke="#fff" stroke-opacity=".12" stroke-width="3"/>
+        </svg>
+        <div class="scene-caption"><span aria-hidden="true">♫</span> <span id="sceneCaption"></span></div>
+      </div>
+      <div id="roomChoices" class="room-thumbnails" role="group"></div>
+      <div class="player"><button id="play" class="play-button"><span id="playIcon" aria-hidden="true">▶</span><span id="playLabel"></span></button><button id="browseMusic" class="text-button" data-i18n="browseMusic"></button><div class="play-state"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span id="playState"></span></div><p id="currentTrackLabel" class="current-track-label"></p><label class="master-volume"><span data-i18n="master"></span><input id="master" type="range" min="0" max="100" value="65"><output id="masterOutput">65%</output></label></div>
+    </div>
+    <aside class="room-settings"><p class="eyebrow">MAKE IT YOURS</p><h2 id="roomHeading" data-i18n="space"></h2><p class="settings-copy" data-i18n="spaceHelp"></p><div id="sceneControls"></div><div class="tempo-row"><label for="tempo" data-i18n="tempo"></label><span><output id="tempoOutput">72</output> BPM</span></div><input id="tempo" type="range" min="50" max="120" value="72"><div class="expression-control"><div class="tempo-row"><label for="brightness" data-i18n="musicExpression"></label><output id="brightnessOutput"></output></div><p data-i18n="expressionHelp"></p><input id="brightness" type="range" min="0" max="100" value="75" step="1"><div class="expression-ends"><span data-i18n="expressionLow"></span><span data-i18n="expressionHigh"></span></div></div><label class="timer-label" for="sleepTimer" data-i18n="timer"></label><select id="sleepTimer"></select></aside>
+  </section>
+  <section id="catalogSection" class="catalog-section" aria-labelledby="catalogHeading">
+    <div class="section-heading"><div><span class="section-number">MUSIC LIBRARY / 48 PIECES</span><h2 id="catalogHeading" data-i18n="catalogTitle"></h2><p data-i18n="catalogHelp"></p></div><span id="catalogCount" class="catalog-count" role="status"></span></div>
+    <div class="catalog-now"><span class="catalog-note" aria-hidden="true">♫</span><div><small data-i18n="selectedTrack"></small><strong id="selectedTrackTitle"></strong></div><button id="catalogPlay" class="primary-button"></button><button id="clearTrack" class="text-button" data-i18n="clearTrack" hidden></button></div>
+    <p class="catalog-mix-help" data-i18n="catalogMixHelp"></p>
+    <input id="catalogSearch" type="search" maxlength="100" data-placeholder="searchTracks">
+    <div id="catalogFilters" class="catalog-filters" role="group"></div>
+    <div id="trackGrid" class="track-grid"></div>
+    <button id="moreTracks" class="secondary-button" data-i18n="moreTracks"></button>
+  </section>
+  <section class="mixer-section" aria-labelledby="mixerHeading"><div class="section-heading"><div><span class="section-number">01 / SOUND</span><h2 id="mixerHeading" data-i18n="mixer"></h2><p data-i18n="mixerHelp"></p></div><button id="resetMix" class="text-button" data-i18n="resetMix"></button></div><div class="mixer-columns"><div><h3><span aria-hidden="true">❋</span> <span data-i18n="environment"></span></h3><div id="environmentSounds" class="sound-grid"></div></div><div><h3><span aria-hidden="true">♬</span> <span data-i18n="instruments"></span></h3><div id="instrumentSounds" class="sound-grid"></div></div></div></section>
+  <section class="journal-section" aria-labelledby="writeHeading"><div class="journal-intro"><span class="section-number">02 / DIARY</span><h2 id="writeHeading" data-i18n="write"></h2><p data-i18n="writeHelp"></p><div class="journal-sketch" aria-hidden="true">♫<span>dear, today.</span></div></div><form id="diaryForm"><div class="form-top"><label><span data-i18n="date"></span><input id="entryDate" type="date" required min="1900-01-01" max="9999-12-31"></label><span class="save-indicator" id="saveIndicator" role="status" aria-live="polite"></span></div><label><span data-i18n="title"></span><input id="entryTitle" maxlength="80" data-placeholder="titlePlaceholder"></label><label><span data-i18n="note"></span><textarea id="entryNote" maxlength="2000" rows="4" data-placeholder="notePlaceholder"></textarea></label><div class="draft-note"><p data-i18n="draftHint"></p><button type="button" id="manageDrafts" class="text-button" data-i18n="draftManager"></button></div><div id="draftError" class="draft-error" role="alert" hidden><span data-i18n="draftSaveHelp"></span><button type="button" id="retryDraftSave" class="secondary-button" data-i18n="retryScene"></button></div><div class="save-row"><button type="submit" id="save" class="primary-button"><span aria-hidden="true">↗</span> <span id="saveLabel"></span></button><button type="button" id="newEntry" class="text-button" data-i18n="newEntry"></button><button type="button" id="deleteEntry" class="text-button danger" data-i18n="delete" hidden></button></div></form></section>
+  <div id="storageError" class="error-panel" hidden role="alert"><p data-i18n="errorLoad"></p><button id="rawBackup" class="secondary-button" data-i18n="rawBackup"></button></div>
+  <section class="recent-section"><div class="section-heading"><div><span class="section-number">03 / MEMORIES</span><h2 data-i18n="recent"></h2><p data-i18n="recentHelp"></p></div><button class="secondary-button" id="calendarMore"><span aria-hidden="true">▦</span> <span data-i18n="calendar"></span></button></div><div id="recentEntries" class="entry-list"></div></section>
+  <section class="backup-section"><p><span aria-hidden="true">⌁</span><span data-i18n="localNotice"></span></p><div><button id="export" class="text-button">↓ <span data-i18n="backup"></span></button><button id="import" class="text-button">↑ <span data-i18n="restore"></span></button><input id="importFile" type="file" accept="application/json,.json" hidden></div></section>
+</main>
+<footer><div class="footer-main"><div><strong data-i18n="brand"></strong><p data-i18n="subtitle"></p></div><nav><a href="https://mcroky.github.io/roky-studio/#feedback" target="_blank" rel="noopener noreferrer" data-i18n="feedback"></a><button data-dialog="updatesDialog" data-i18n="updates"></button><button data-dialog="aboutDialog" data-i18n="about"></button><a href="https://x.com/loki60542" target="_blank" rel="me noopener noreferrer">X ↗</a><a href="https://www.threads.com/@loki60542" target="_blank" rel="me noopener noreferrer">Threads ↗</a><a data-web-only-commerce href="https://litt.ly/roky.studio" target="_blank" rel="noopener noreferrer" data-i18n="ebooks"></a></nav></div><div class="footer-bottom"><small>© 2026 Roky Studio · v0.5.0</small><button data-web-only-commerce data-dialog="supportDialog" class="support-button">♡ <span data-i18n="support"></span></button></div></footer>
+<dialog id="immersionDialog"><header class="immersion-header"><div><h2 data-i18n="immersionTitle"></h2><p id="immersionDescription"></p></div><button class="close-dialog" aria-label="닫기">×</button></header><div id="immersiveStage" class="immersive-stage"></div><div class="immersion-footer"><p id="immersionTrack"></p><button id="immersionPlay" class="primary-button"></button><button id="nextRoom" class="secondary-button" data-i18n="nextRoom"></button><button class="text-button" id="leaveImmersion" data-i18n="leaveImmersion"></button></div></dialog>
+<dialog id="draftsDialog"><div class="dialog-heading"><h2 data-i18n="draftManager"></h2><button class="close-dialog" aria-label="닫기">×</button></div><p data-i18n="draftBackupHelp"></p><p id="draftRecoveryWarning" class="draft-error" role="alert" hidden></p><button id="exportDraftOriginal" class="secondary-button" data-i18n="draftOriginal" hidden></button><div id="draftList"></div></dialog>
+<dialog id="calendarDialog" class="calendar-dialog"><div class="dialog-heading"><h2 data-i18n="calendar"></h2><button class="close-dialog" aria-label="닫기">×</button></div><div class="calendar-month"><button id="prevMonth" class="icon-button">‹</button><h3 id="calendarMonth"></h3><button id="nextMonth" class="icon-button">›</button></div><div id="weekdays" class="weekdays"></div><div id="calendarGrid" class="calendar-grid"></div><div id="dayEntries" class="day-entries"></div></dialog>
+<dialog id="supportDialog"><div class="dialog-heading"><h2 data-i18n="support"></h2><button class="close-dialog">×</button></div><p data-i18n="supportHelp"></p><a class="primary-button" href="https://buymeacoffee.com/roky.studio" target="_blank" rel="noopener noreferrer" data-i18n="coffee"></a><button id="copyBank" class="secondary-button" data-i18n="bank"></button><input id="bankNumber" value="3333071025774" readonly aria-label="KakaoBank account"><p id="copyStatus" role="status"></p></dialog>
+<dialog id="aboutDialog"><div class="dialog-heading"><h2 data-i18n="about"></h2><button class="close-dialog">×</button></div><p data-i18n="aboutText"></p><p data-i18n="localNotice"></p></dialog>
+<dialog id="updatesDialog"><div class="dialog-heading"><h2 data-i18n="updates"></h2><button class="close-dialog">×</button></div><p class="eyebrow">v0.5.0</p><p data-i18n="releaseDraft"></p><p class="eyebrow">v0.4.0</p><p data-i18n="releaseArt"></p><p class="eyebrow">v0.3.0</p><p data-i18n="releaseCatalog"></p><p class="eyebrow">v0.2.0</p><p data-i18n="releaseExpression"></p><p class="eyebrow">v0.1.0</p><p data-i18n="release"></p></dialog>
+<dialog id="confirmDialog"><p id="confirmText"></p><div class="confirm-actions"><button id="confirmCancel" class="secondary-button" data-i18n="cancel"></button><button id="confirmAccept" class="primary-button"></button></div></dialog>
+<div id="toast" role="status" aria-live="polite" class="toast"></div>
+<script type="module" src="./app.js"></script>
+</body></html>
