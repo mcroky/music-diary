@@ -1,5 +1,5 @@
 import {legacyBrightness} from './music.js';
-import {isTrackId} from './catalog.js';
+import {isTrackId,LEADS,RHYTHMS,DENSITIES,defaultArrangement} from './catalog.js';
 export const KEY='roky-music-diary.v1';
 export const SOUNDS=['rain','fire','waves','wind','birds','cafe','piano','drums','bass','keys','guitar','bell'];
 export const MOODS=['calm','happy','sad','tired','hopeful','restless'];
@@ -15,20 +15,23 @@ export function validateEntry(e){
   if(!finite(brightness,0,100))throw new Error('INVALID_ENTRY');
   const trackId=e.trackId===undefined?null:e.trackId;
   if(!isTrackId(trackId))throw new Error('INVALID_ENTRY');
-  return {id:e.id,date:e.date,title:e.title,note:e.note,moods:[...new Set(e.moods)],room:e.room,light:e.light,weather:e.weather,time:e.time,tempo:e.tempo,master:e.master,brightness,trackId,sounds:Object.fromEntries(SOUNDS.map(s=>[s,e.sounds[s]]))};
+  const arrangement=e.arrangement===undefined?defaultArrangement():e.arrangement;
+  if(!arrangement||typeof arrangement!=='object'||!member(arrangement.lead,LEADS)||!member(arrangement.rhythm,RHYTHMS)||!member(arrangement.density,DENSITIES))throw new Error('INVALID_ENTRY');
+  return {id:e.id,date:e.date,title:e.title,note:e.note,moods:[...new Set(e.moods)],room:e.room,light:e.light,weather:e.weather,time:e.time,tempo:e.tempo,master:e.master,brightness,trackId,arrangement:{lead:arrangement.lead,rhythm:arrangement.rhythm,density:arrangement.density},sounds:Object.fromEntries(SOUNDS.map(s=>[s,e.sounds[s]]))};
 }
 export function parseBackup(raw){
   if(typeof raw!=='string'||raw.length>5_000_000||new TextEncoder().encode(raw).byteLength>5_000_000)throw new Error('INVALID_BACKUP');
   const data=JSON.parse(raw);
-  if(data?.app!=='roky-music-room'||![1,2,3].includes(data.version)||!Array.isArray(data.entries)||data.entries.length>5000)throw new Error('INVALID_BACKUP');
+  if(data?.app!=='roky-music-room'||![1,2,3,4].includes(data.version)||!Array.isArray(data.entries)||data.entries.length>5000)throw new Error('INVALID_BACKUP');
   if(data.version>=2&&data.entries.some(e=>!e||e.brightness===undefined))throw new Error('INVALID_BACKUP');
-  if(data.version===3&&data.entries.some(e=>e.trackId===undefined))throw new Error('INVALID_BACKUP');
+  if(data.version>=3&&data.entries.some(e=>e.trackId===undefined))throw new Error('INVALID_BACKUP');
+  if(data.version===4&&data.entries.some(e=>e.arrangement===undefined))throw new Error('INVALID_BACKUP');
   const entries=data.entries.map(validateEntry);
   if(new Set(entries.map(e=>e.id)).size!==entries.length)throw new Error('DUPLICATE_ID');
   return entries;
 }
 export function encodeBackup(entries){
-  const raw=JSON.stringify({app:'roky-music-room',version:3,exportedAt:new Date().toISOString(),entries:entries.map(validateEntry)},null,2);
+  const raw=JSON.stringify({app:'roky-music-room',version:4,exportedAt:new Date().toISOString(),entries:entries.map(validateEntry)},null,2);
   // Never persist a file that our own importer would reject, including UTF-8 size.
   parseBackup(raw);return raw;
 }

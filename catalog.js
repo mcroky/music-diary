@@ -51,10 +51,21 @@ export const TRACKS=CATEGORIES.flatMap((category,c)=>TITLES[c].map((title,index)
 const TRACK_MAP=new Map(TRACKS.map(track=>[track.id,track]));
 export const getTrack=id=>TRACK_MAP.get(id)||null;
 export const isTrackId=id=>id===null||TRACK_MAP.has(id);
+export const LEADS=['original','piano','keys','guitar','bell'];
+export const RHYTHMS=['original','gentle','steady','groove','bossa'];
+export const DENSITIES=['sparse','balanced','full'];
+export const defaultArrangement=()=>({lead:'original',rhythm:'original',density:'balanced'});
+export const trackLead=track=>STYLES[track.style].lead;
+const RHYTHM_PATTERNS={
+ gentle:{kick:[0],snare:[4],hat:[0,4],swing:0},
+ steady:{kick:[0,4],snare:[2,6],hat:[0,2,4,6],swing:0},
+ groove:{kick:[0,3,4,7],snare:[2,6],hat:[0,1,2,3,4,5,6,7],swing:.12},
+ bossa:{kick:[0,3,6],snare:[2,5],hat:[0,2,3,4,6,7],swing:.04}
+};
 
-export function composeFrame(track,bar,step,brightness=track.brightness){
+export function composeFrame(track,bar,step,brightness=track.brightness,arrangement=defaultArrangement()){
   bar%=16;
-  const style=STYLES[track.style],minor=brightness<40,neutral=brightness>=40&&brightness<=60,scale=minor?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11];
+  const style=STYLES[track.style],lead=arrangement.lead==='original'?style.lead:arrangement.lead,minor=brightness<40,neutral=brightness>=40&&brightness<=60,scale=minor?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11];
   const degree=PROGRESSIONS[(track.seed+Math.floor(track.seed/4))%PROGRESSIONS.length][bar%8];
   const degreeNote=n=>track.tonic+scale[((n%7)+7)%7]+12*Math.floor(n/7);
   const chord=[degreeNote(degree),neutral?degreeNote(degree)+2:degreeNote(degree+2),degreeNote(degree+4),degreeNote(degree+6)];
@@ -63,15 +74,17 @@ export function composeFrame(track,bar,step,brightness=track.brightness){
   const choice=motif[motifIndex],leadPalette=[chord[0],chord[1],chord[2],chord[3],chord[0]+12,degreeNote(degree+8)];
   const notes=[];
   const quiet=bar%16>=12;
-  if(choice!==null&&step%style.stride===0&&!(quiet&&step%3===1))notes.push({id:style.lead,midi:leadPalette[choice]+12,duration:track.style==='ambient'?2.8:track.style==='musicbox'?1.9:1.15,volume:.12+(track.seed%4)*.012});
+  if(choice!==null&&step%style.stride===0&&!(quiet&&step%3===1)&&!(arrangement.density==='sparse'&&step%4!==0))notes.push({id:lead,midi:leadPalette[choice]+12,duration:track.style==='ambient'?2.8:track.style==='musicbox'?1.9:1.15,volume:.12+(track.seed%4)*.012});
   if(step===0){
     chord.slice(0,track.style==='jazz'?4:3).forEach((midi,i)=>notes.push({id:'keys',midi,duration:Math.min(5,240/track.tempo*.95),volume:.045,delay:i*.014}));
     notes.push({id:'bass',midi:chord[0]-12,duration:1.1,volume:.21});
   }
   if(step===4)notes.push({id:'bass',midi:chord[2]-12,duration:.8,volume:.14});
-  if(style.lead!=='guitar'&&step%2===0)notes.push({id:'guitar',midi:chord[(step/2+bar)%3],duration:.7,volume:.09});
-  if(style.lead!=='piano'&&(step===2||step===6))notes.push({id:'piano',midi:chord[step===2?1:2]+12,duration:1.4,volume:.1});
-  if(style.lead!=='bell'&&step===6&&bar%2===1)notes.push({id:'bell',midi:chord[2]+24,duration:2,volume:.07});
-  const percussion=style.hat.length?style:STYLES.jazz;
-  return {notes,kick:!quiet&&percussion.kick.includes(step),snare:!quiet&&percussion.snare.includes(step),hat:percussion.hat.includes(step),swing:step%2?style.swing:0};
+  if(lead!=='guitar'&&step%2===0&&!(arrangement.density==='sparse'&&step===2))notes.push({id:'guitar',midi:chord[(step/2+bar)%3],duration:.7,volume:.09});
+  if(lead!=='piano'&&(step===2||step===6))notes.push({id:'piano',midi:chord[step===2?1:2]+12,duration:1.4,volume:.1});
+  if(lead!=='bell'&&step===6&&bar%2===1)notes.push({id:'bell',midi:chord[2]+24,duration:2,volume:.07});
+  if(arrangement.density==='full'&&(step===3||step===7))notes.push({id:lead,midi:chord[step===3?1:2]+12,duration:.65,volume:.07});
+  const percussion=arrangement.rhythm==='original'?(style.hat.length?style:STYLES.jazz):RHYTHM_PATTERNS[arrangement.rhythm];
+  const swing=arrangement.rhythm==='original'?style.swing:percussion.swing;
+  return {notes,kick:!quiet&&percussion.kick.includes(step),snare:!quiet&&percussion.snare.includes(step),hat:percussion.hat.includes(step),swing:step%2?swing:0};
 }

@@ -1,5 +1,5 @@
 import {legacyBrightness,musicExpression} from './music.js';
-import {getTrack,composeFrame} from './catalog.js';
+import {getTrack,composeFrame,defaultArrangement} from './catalog.js';
 // All sounds are synthesized locally. No samples, microphones or network audio.
 export class RoomAudio {
   constructor(){this.context=null;this.running=false;this.layers={};this.sources=new Set();this.step=0;}
@@ -74,12 +74,13 @@ export class RoomAudio {
       if(beat===0){
         this.phraseBrightness=this.config.brightness??legacyBrightness(this.config.moods);
         this.phrase=musicExpression(this.phraseBrightness);
+        this.phraseArrangement=structuredClone(this.config.arrangement??defaultArrangement());
         const id=this.config.trackId??null;
         if(this.activeTrackId!==id){this.activeTrackId=id;this.trackStartedStep=this.step;}
         this.phraseTrack=getTrack(id);
       }
       if(this.phraseTrack){
-        const frame=composeFrame(this.phraseTrack,Math.floor((this.step-this.trackStartedStep)/8),beat,this.phraseBrightness);
+        const frame=composeFrame(this.phraseTrack,Math.floor((this.step-this.trackStartedStep)/8),beat,this.phraseBrightness,this.phraseArrangement);
         const at=t+frame.swing*60/this.config.tempo/2;
         for(const note of frame.notes)this.note(note.id,note.midi,at+(note.delay||0),note.duration,note.volume);
         if(this.config.sounds.drums>0){if(frame.kick)this.kick(at);if(frame.snare)this.hiss('drums',at,.13,.17,1800);if(frame.hat)this.hiss('drums',at,.04,.055,7000);}

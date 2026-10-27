@@ -2,7 +2,7 @@ import {RoomAudio} from './audio.js';
 import {KEY,SOUNDS,MOODS,ROOMS,LIGHTS,WEATHERS,TIMES,readEntries,writeEntries,encodeBackup,parseBackup,mergeEntries,validateEntry} from './storage.js';
 import {translate,locales} from './translations.js';
 import {musicExpression} from './music.js';
-import {CATEGORIES,TRACKS,getTrack,localized} from './catalog.js';
+import {CATEGORIES,TRACKS,getTrack,localized,LEADS,RHYTHMS,DENSITIES,defaultArrangement,trackLead} from './catalog.js';
 import {ROOM_ART,loadRoomArtwork} from './room-art.js';
 import {DRAFT_PREFIX,DRAFT_POINTER,parseDraft,readDrafts,writeDraft,removeDraftBranch} from './drafts.js';
 const $=id=>document.getElementById(id);
@@ -12,7 +12,7 @@ const moodColors={calm:'#9cae88',happy:'#d0b26d',sad:'#8fa6b0',tired:'#b1a1b8',h
 const localDate=(date=new Date())=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 let lang='ko';try{lang=localStorage.getItem('roky-music-language')||'ko';}catch{}if(!locales[lang])lang='ko';
 const t=key=>translate(lang,key);
-function fresh(date=localDate()){return {id:crypto.randomUUID(),date,title:'',note:'',moods:['calm'],room:'attic',light:'warm',weather:'rainy',time:'sunset',tempo:72,master:65,brightness:75,trackId:null,sounds:Object.fromEntries(SOUNDS.map(s=>[s,s==='rain'?35:s==='piano'?55:0]))};}
+function fresh(date=localDate()){return {id:crypto.randomUUID(),date,title:'',note:'',moods:['calm'],room:'attic',light:'warm',weather:'rainy',time:'sunset',tempo:72,master:65,brightness:75,trackId:null,arrangement:defaultArrangement(),sounds:Object.fromEntries(SOUNDS.map(s=>[s,s==='rain'?35:s==='piano'?55:0]))};}
 let state=fresh(),entries=[],editing=false,dirty=false,locked=false,rawOriginal=null,rawDownloaded=false,loadedVersion=null;
 let calendarDate=new Date(new Date().getFullYear(),new Date().getMonth(),1,12),selectedDay=localDate();
 let timerEnd=0,sleepMinutes=0,timerTick,toastTimeout,confirmResolve;
@@ -57,7 +57,7 @@ function flushDraft(){
       if(raw!==null&&!matches){draftParent={id:lastDraft.id,revision:lastDraft.revision};draftId=crypto.randomUUID();lastDraft=null;}
     }
     if(draftStatus==='saved'&&matches)return true;
-    lastDraft=writeDraft(localStorage,{app:'roky-music-diary-draft',version:1,id:draftId,revision:crypto.randomUUID(),parent:draftParent,updatedAt:Date.now(),editing,baseEntry:editing?JSON.parse(loadedVersion):null,entry:state});
+    lastDraft=writeDraft(localStorage,{app:'roky-music-diary-draft',version:2,id:draftId,revision:crypto.randomUUID(),parent:draftParent,updatedAt:Date.now(),editing,baseEntry:editing?JSON.parse(loadedVersion):null,entry:state});
     draftStatus='saved';draftSavedAt=lastDraft.updatedAt;draftFailureNotified=false;try{sessionStorage.setItem(DRAFT_POINTER,draftId);}catch{}
     updateSave();refreshDrafts();return true;
   }catch{draftStatus='error';updateSave();if(!draftFailureNotified)toast('draftSaveError');draftFailureNotified=true;return false;}
@@ -141,7 +141,7 @@ function renderDateStamp(){const date=new Date(state.date+'T12:00:00');if(!Numbe
 function renderDraft(){
   renderMoods();renderSettings();renderSounds();renderRoomChoices();updateScene();updatePlayer();updateSave();renderDateStamp();
   $('entryDate').value=state.date;$('entryTitle').value=state.title;$('entryNote').value=state.note;$('tempo').value=state.tempo;$('tempoOutput').value=state.tempo;$('master').value=state.master;$('masterOutput').value=`${state.master}%`;setFill($('tempo'));setFill($('master'));
-  renderExpression();
+  renderExpression();renderArrangement();
   renderCatalog();
 }
 function renderExpression(){
@@ -169,11 +169,32 @@ function renderTrackCards(){
   const selected=getTrack(state.trackId);$('selectedTrackTitle').textContent=selected?localized(selected.title,lang):t('customTrack');$('currentTrackLabel').textContent=selected?`${t('backgroundMusic')} · ${localized(selected.title,lang)}`:t('customTrack');$('clearTrack').hidden=!selected;
   $('immersionTrack').textContent=$('currentTrackLabel').textContent;
 }
-function selectTrack(track){
-  state.trackId=track.id;state.tempo=track.tempo;state.brightness=track.brightness;
+const arrangementPresets=[
+  {id:'piano',label:'presetPiano',arrangement:{lead:'piano',rhythm:'gentle',density:'sparse'},mix:{piano:65,keys:22,bass:20,drums:14}},
+  {id:'cafe',label:'presetCafe',arrangement:{lead:'keys',rhythm:'groove',density:'balanced'},mix:{keys:58,piano:22,bass:32,drums:26}},
+  {id:'walk',label:'presetWalk',arrangement:{lead:'guitar',rhythm:'bossa',density:'full'},mix:{guitar:62,keys:22,piano:20,bass:30,drums:22}},
+  {id:'dream',label:'presetDream',arrangement:{lead:'bell',rhythm:'gentle',density:'full'},mix:{bell:55,keys:40,piano:20,bass:16,drums:12}}
+];
+function syncArrangement(){
+  const enabled=Boolean(getTrack(state.trackId));$('arrangementControls').disabled=!enabled;$('arrangeStart').hidden=enabled;$('arrangeEmpty').hidden=enabled;
+  for(const [field,id] of [['lead','arrangeLead'],['rhythm','arrangeRhythm'],['density','arrangeDensity']])$(id).value=state.arrangement[field];
+}
+function renderArrangement(){
+  const labels={original:'arrangeOriginal',gentle:'rhythmGentle',steady:'rhythmSteady',groove:'rhythmGroove',bossa:'rhythmBossa',sparse:'densitySparse',balanced:'densityBalanced',full:'densityFull'};
+  for(const [id,values]of [['arrangeLead',LEADS],['arrangeRhythm',RHYTHMS],['arrangeDensity',DENSITIES]])$(id).replaceChildren(...values.map(value=>new Option(t(labels[value]||value),value)));
+  $('arrangementPresets').replaceChildren(...arrangementPresets.map(preset=>{const button=document.createElement('button');button.type='button';button.className='arrangement-preset';button.dataset.preset=preset.id;button.textContent=t(preset.label);button.addEventListener('click',()=>applyArrangementPreset(preset));return button;}));
+  syncArrangement();
+}
+function arrangementChanged(){syncArrangement();renderSounds();markDirty();audio.update(state);}
+function applyArrangementPreset(preset){
+  if(!getTrack(state.trackId))return;
+  state.arrangement={...preset.arrangement};for(const id of SOUNDS.slice(6))state.sounds[id]=preset.mix[id]||0;arrangementChanged();
+}
+function selectTrack(track,{focus=true}={}){
+  state.trackId=track.id;state.tempo=track.tempo;state.brightness=track.brightness;state.arrangement=defaultArrangement();
   // A composition supplies the instrument mix; the user's room and environmental sounds stay personal.
   for(const id of SOUNDS.slice(6))state.sounds[id]=track.mix[id]||0;
-  renderSounds();renderExpression();$('tempo').value=state.tempo;$('tempoOutput').value=state.tempo;setFill($('tempo'));renderTrackCards();$(`track-${track.id}`)?.focus();markDirty();audio.update(state);toast(audio.running?'trackQueued':'trackSelected');
+  renderSounds();renderExpression();$('tempo').value=state.tempo;$('tempoOutput').value=state.tempo;setFill($('tempo'));renderTrackCards();syncArrangement();if(focus)$(`track-${track.id}`)?.focus();markDirty();audio.update(state);toast(audio.running?'trackQueued':'trackSelected');
 }
 function entryCard(entry){
   const button=document.createElement('button');button.className='entry-card';button.setAttribute('aria-label',`${t('openEntry')}: ${entry.title||t('untitled')}, ${entry.date}`);
@@ -242,7 +263,16 @@ $('leaveImmersion').addEventListener('click',()=>closeDialog($('immersionDialog'
 $('immersionPlay').addEventListener('click',()=>{if(!$('play').disabled)$('play').click();});
 $('nextRoom').addEventListener('click',()=>chooseRoom(ROOMS[(ROOMS.indexOf(state.room)+1)%ROOMS.length]));
 $('retryScene').addEventListener('click',()=>loadRoomArtwork(state.room,{force:true,onState:sceneState}));
-$('clearTrack').addEventListener('click',()=>{state.trackId=null;renderTrackCards();markDirty();audio.update(state);});
+$('clearTrack').addEventListener('click',()=>{state.trackId=null;state.arrangement=defaultArrangement();renderTrackCards();syncArrangement();markDirty();audio.update(state);});
+$('arrangeStart').addEventListener('click',()=>{selectTrack(TRACKS[0],{focus:false});$('arrangeLead').focus();});
+for(const [field,id]of [['lead','arrangeLead'],['rhythm','arrangeRhythm'],['density','arrangeDensity']])$(id).addEventListener('change',()=>{
+  const track=getTrack(state.trackId);if(!track)return;
+  state.arrangement[field]=$(id).value;
+  if(field==='lead'){const lead=state.arrangement.lead==='original'?trackLead(track):state.arrangement.lead;if(state.sounds[lead]===0)state.sounds[lead]=50;}
+  if(field==='rhythm'&&state.arrangement.rhythm!=='original'&&state.sounds.drums===0)state.sounds.drums=22;
+  arrangementChanged();
+});
+$('arrangeReset').addEventListener('click',()=>{const track=getTrack(state.trackId);if(!track)return;state.arrangement=defaultArrangement();for(const id of SOUNDS.slice(6))state.sounds[id]=track.mix[id]||0;arrangementChanged();});
 $('sleepTimer').addEventListener('change',()=>{sleepMinutes=Number($('sleepTimer').value);restartTimer();});
 $('suggest').addEventListener('click',()=>{
   const recipes={calm:{rain:30,piano:48,keys:15},happy:{birds:25,piano:45,drums:25,bass:28},sad:{rain:40,piano:52,bell:12},tired:{fire:35,keys:45,piano:22},hopeful:{waves:30,guitar:48,bell:20,bass:18},restless:{wind:20,waves:25,keys:40}};

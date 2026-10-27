@@ -4,7 +4,8 @@ export const DRAFT_POINTER='roky-music-draft-pointer.v1';
 const identifier=value=>typeof value==='string'&&/^[a-zA-Z0-9-]{1,100}$/.test(value);
 
 export function validateDraft(value){
-  if(!value||value.app!=='roky-music-diary-draft'||value.version!==1||!identifier(value.id)||!identifier(value.revision)||typeof value.editing!=='boolean'||!Number.isSafeInteger(value.updatedAt)||value.updatedAt<0||value.updatedAt>8_640_000_000_000_000)throw new Error('INVALID_DRAFT');
+  if(!value||value.app!=='roky-music-diary-draft'||![1,2].includes(value.version)||!identifier(value.id)||!identifier(value.revision)||typeof value.editing!=='boolean'||!Number.isSafeInteger(value.updatedAt)||value.updatedAt<0||value.updatedAt>8_640_000_000_000_000)throw new Error('INVALID_DRAFT');
+  if(value.version===2&&(!value.entry?.arrangement||(value.editing&&!value.baseEntry?.arrangement)))throw new Error('INVALID_DRAFT');
   // An empty date is a valid unfinished input, but cannot become a published diary.
   const entry=validateEntry({...value.entry,date:value.entry?.date===''?'2000-01-01':value.entry?.date});
   if(value.entry.date==='')entry.date='';
@@ -12,7 +13,7 @@ export function validateDraft(value){
   if(value.editing&&baseEntry.id!==entry.id)throw new Error('INVALID_DRAFT_BASE');
   let parent=null;
   if(value.parent!==null&&value.parent!==undefined){if(!identifier(value.parent.id)||!identifier(value.parent.revision)||value.parent.id===value.id)throw new Error('INVALID_DRAFT_PARENT');parent={id:value.parent.id,revision:value.parent.revision};}
-  return {app:'roky-music-diary-draft',version:1,id:value.id,revision:value.revision,updatedAt:value.updatedAt,editing:value.editing,baseEntry,entry,parent};
+  return {app:'roky-music-diary-draft',version:value.version,id:value.id,revision:value.revision,updatedAt:value.updatedAt,editing:value.editing,baseEntry,entry,parent};
 }
 export function parseDraft(raw){
   if(typeof raw!=='string'||raw.length>100_000)throw new Error('INVALID_DRAFT');
