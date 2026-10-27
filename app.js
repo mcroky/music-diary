@@ -390,7 +390,8 @@ $('brightness').addEventListener('input',()=>{state.brightness=Number($('brightn
 $('catalogSearch').addEventListener('input',()=>{catalogQuery=$('catalogSearch').value;catalogLimit=8;renderTrackCards();});
 $('moreTracks').addEventListener('click',()=>{const count=$('trackGrid').children.length;catalogLimit+=8;renderTrackCards();$('trackGrid').children[count]?.focus();});
 $('catalogPlay').addEventListener('click',()=>{if(!$('play').disabled)$('play').click();});
-$('browseMusic').addEventListener('click',()=>$('catalogSection').scrollIntoView({block:'start',behavior:'auto'}));
+$('browseMusic').addEventListener('click',()=>{$('catalogDetails').open=true;$('catalogSection').scrollIntoView({block:'start',behavior:'auto'});});
+$('goWrite').addEventListener('click',()=>document.querySelector('.journal-section').scrollIntoView({block:'start',behavior:'auto'}));
 $('enterImmersion').addEventListener('click',()=>{const focus=document.activeElement;$('immersiveStage').append($('roomScene'));document.body.classList.add('is-immersed');showDialog('immersionDialog');lastFocus.set($('immersionDialog'),focus);});
 $('leaveImmersion').addEventListener('click',()=>closeDialog($('immersionDialog')));
 $('immersionPlay').addEventListener('click',()=>{if(!$('play').disabled)$('play').click();});
@@ -480,6 +481,14 @@ connectAndroid({onPause:pauseAndroid,onBack:async()=>{
 window.addEventListener('pagehide',()=>{flushDraft();cancelAlbumExport();cancelDayExport();audio.stop();albumPlayer.stop();});
 window.addEventListener('beforeunload',event=>{if(dirty&&!flushDraft()){event.preventDefault();event.returnValue='';}});
 window.addEventListener('storage',event=>{if(event.key?.startsWith(DRAFT_PREFIX)||event.key===null)refreshDrafts();if(event.key!==KEY&&event.key!==null)return;try{entries=readEntries(localStorage);wallet=awardDays(readWallet(localStorage),entries);renderEntries();refreshRewards();renderRoomChoices();renderSettings();renderTrackCards();if($('albumDialog').open)renderAlbum();if($('dayExportDialog').open)renderDayExport();}catch{locked=true;rawOriginal=event.newValue;rawDownloaded=false;updateSave();}});
+// Keep the frequently used diary near the room on narrow screens; desktop keeps its original order.
+const mobileLayout=matchMedia('(max-width: 750px)');
+function applyMobileLayout(){
+  const studio=document.querySelector('.studio'),journal=document.querySelector('.journal-section');
+  if(mobileLayout.matches)studio.after(journal);else $('storageError').before(journal);
+  for(const id of ['roomDetails','catalogDetails','arrangementDetails','mixerDetails'])$(id).open=!mobileLayout.matches;
+}
+applyMobileLayout();mobileLayout.addEventListener('change',applyMobileLayout);
 renderLanguage();
 try{const pointer=sessionStorage.getItem(DRAFT_POINTER),source=draftCatalogue.drafts.find(d=>d.id===pointer);if(source)applyRecoveredDraft(source);}catch{}
 if('ResizeObserver'in window)new ResizeObserver(revealSelectedRoom).observe($('roomChoices'));

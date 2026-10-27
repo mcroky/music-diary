@@ -1,5 +1,6 @@
 export const locales={ko:'ko-KR',en:'en-US',ja:'ja-JP',zh:'zh-CN'};
 const rows={
+ roomControls:['방과 분위기 조절','Room & mood settings','部屋と雰囲気の設定','房间与氛围设置'],writeShortcut:['일기 쓰기','Write diary','日記を書く','写日记'],releaseMobile:['2026.10.27 · 모바일에서 방과 일기 작성에 집중할 수 있도록 화면을 간결하게 정리했어요.','2026.10.27 · A simpler mobile layout brings your room and diary to the front.','2026.10.27 · モバイル画面を整理し、部屋と日記を使いやすくしました。','2026.10.27 · 简化手机界面，方便使用房间和日记。'],
  dayExportDone:['하루 음악 다운로드를 시작했어요.','Your daily music download has started.','この日の音楽をダウンロードしています。','当天音乐已开始下载。'],
  shopTitle:['음표 상점','Note shop','音符ショップ','音符商店'],
  shopHelp:['일기를 남긴 날짜마다 음표 3개를 받아요. 같은 날짜는 한 번만 지급하며 기존에 저장한 날짜도 인정해요. 음표와 구매 내역은 일기 백업에 함께 담깁니다.','Earn 3 notes for each diary date, once per date, including past saved dates. Notes and purchases are included in diary backups.','日記の日付ごとに音符を3つ獲得。同じ日付は1回のみ、以前の日記も対象です。音符と購入履歴はバックアップに含まれます。','每个日记日期获得3个音符，同一天只领取一次，已有日记也计入。音符和购买记录包含在备份中。'],

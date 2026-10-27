@@ -43,3 +43,12 @@ dialog{max-height:calc(85dvh - var(--app-safe-top) - var(--app-safe-bottom));max
 .toast{bottom:calc(22px + var(--app-safe-bottom))}
 .shop-balance{font-size:18px;font-weight:700;color:var(--green);margin:16px 0 8px}.shop-items{display:grid;gap:10px;margin-top:20px}.shop-item{display:flex;align-items:center;gap:14px;padding:14px;border:1px solid #dce0d2;border-radius:10px;background:#f9f8f3}.shop-item img{width:92px;height:66px;object-fit:cover;border-radius:7px}.shop-item div{flex:1;min-width:0}.shop-item strong{font-size:13px}.shop-item p{font-size:11px;color:var(--muted);margin-top:5px}.shop-item button{flex-shrink:0}.album-export-controls label{display:flex;flex-direction:column;gap:6px}#dayExportDialog>p,#shopDialog>p{line-height:1.7;color:var(--muted)}#dayExportStatus{min-height:1.5em}#dayExportProgress{width:100%}@media(max-width:400px){.shop-item{flex-wrap:wrap}.shop-item img{width:72px;height:54px}}
 @media(max-width:750px){.main-nav{overflow-x:auto;overflow-y:hidden;gap:14px;scrollbar-width:thin}.main-nav button{flex-shrink:0}.shop-item button{white-space:normal}}
+.mobile-fold>summary,.mobile-only{display:none}
+@media(max-width:750px){
+  .mobile-fold>summary{display:flex;align-items:center;gap:10px;min-height:54px;padding:13px 16px;border:1px solid #dce0d2;border-radius:10px;background:#f7f8f1;color:#3e5847;font-size:13px;font-weight:600;cursor:pointer;list-style:none}
+  .mobile-fold>summary::-webkit-details-marker{display:none}.mobile-fold>summary:after{content:'+';font-size:19px;font-weight:400;margin-left:auto;color:#7c8b70}.mobile-fold[open]>summary:after{content:'−'}
+  .mobile-fold>summary:focus-visible{outline:3px solid #af884d;outline-offset:3px}.mobile-fold[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
+  .mobile-fold>.catalog-section,.mobile-fold>.mixer-section{padding:22px 0 26px}.room-fold>.room-settings{padding:20px 14px 8px}.mobile-only{display:inline-flex}
+  .utility{margin:15px 0 18px}.intro{margin-bottom:18px}.intro h1{font-size:29px;line-height:1.35;margin:7px 0}.intro-copy{line-height:1.6}.date-stamp{padding:13px 9px;min-width:72px;margin-right:0}.date-stamp strong{font-size:34px}
+  .mood-strip{padding:15px 0;margin-bottom:18px;gap:10px}.mood-strip p{margin-top:3px}.studio{gap:12px}.journal-section{padding:24px 0;gap:14px}.journal-intro h2{font-size:20px;line-height:1.4}.journal-intro p{margin-top:4px}.journal-section form label{margin-bottom:12px}.save-row{gap:9px}
+}
