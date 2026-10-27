@@ -5,6 +5,7 @@ import {musicExpression} from './music.js';
 import {CATEGORIES,TRACKS,getTrack,localized,LEADS,RHYTHMS,DENSITIES,defaultArrangement,trackLead} from './catalog.js';
 import {ROOM_ART,loadRoomArtwork} from './room-art.js';
 import {DRAFT_PREFIX,DRAFT_POINTER,parseDraft,readDrafts,writeDraft,removeDraftBranch} from './drafts.js';
+import {entriesForMonth,albumSummary,canHear,nextAudible,AlbumPlayer} from './album.js';
 const $=id=>document.getElementById(id);
 const face={calm:'◡',happy:'☺',sad:'☂',tired:'☾',hopeful:'✧',restless:'〰'};
 const icons={rain:'☂',fire:'♨',waves:'≋',wind:'〰',birds:'♧',cafe:'☕',piano:'♩',drums:'◉',bass:'♪',keys:'▥',guitar:'♬',bell:'♧'};
@@ -17,6 +18,9 @@ let state=fresh(),entries=[],editing=false,dirty=false,locked=false,rawOriginal=
 let calendarDate=new Date(new Date().getFullYear(),new Date().getMonth(),1,12),selectedDay=localDate();
 let timerEnd=0,sleepMinutes=0,timerTick,toastTimeout,confirmResolve;
 const audio=new RoomAudio(),lastFocus=new Map();
+let albumDate=new Date(new Date().getFullYear(),new Date().getMonth(),1,12),albumIndex=0,albumError=false;
+const albumAudio=new RoomAudio();
+const albumPlayer=new AlbumPlayer(albumAudio,{onChange:player=>{if(player.index>=0)albumIndex=player.index;if($('albumDialog')?.open)renderAlbum();},onError:()=>{albumError=true;if($('albumDialog').open)renderAlbum();}});
 let catalogCategory='all',catalogQuery='',catalogLimit=8;
 let draftId=crypto.randomUUID(),draftParent=null,lastDraft=null,draftStatus='idle',draftSavedAt=0,draftTimer,maxDraftTimer,draftFailureNotified=false;
 let draftCatalogue={drafts:[],records:[],invalid:[]},draftReadFailed=false;
@@ -24,7 +28,7 @@ try{entries=readEntries(localStorage);}catch{locked=true;try{rawOriginal=localSt
 function toast(key){clearTimeout(toastTimeout);$('toast').textContent=t(key);$('toast').classList.add('show');toastTimeout=setTimeout(()=>$('toast').classList.remove('show'),5200);}
 function download(data,name){const blob=new Blob([data],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function showDialog(id){const dialog=$(id);lastFocus.set(dialog,document.activeElement);if(!dialog.open)dialog.showModal();}
-function closeDialog(dialog){if(dialog.id==='immersionDialog'){$('roomChoices').before($('roomScene'));document.body.classList.remove('is-immersed');}dialog.close();lastFocus.get(dialog)?.focus();}
+function closeDialog(dialog){if(dialog.id==='immersionDialog'){$('roomChoices').before($('roomScene'));document.body.classList.remove('is-immersed');}if(dialog.id==='albumDialog')albumPlayer.stop();dialog.close();lastFocus.get(dialog)?.focus();}
 function ask(key,accept){$('confirmText').textContent=t(key);$('confirmAccept').textContent=t(accept);showDialog('confirmDialog');return new Promise(resolve=>{confirmResolve=resolve;});}
 function finishConfirm(result){closeDialog($('confirmDialog'));confirmResolve?.(result);confirmResolve=null;}
 async function canLeaveDraft(){if(!dirty||flushDraft())return true;const discard=await ask('draftWarn','discard');if(discard)finishActiveDraft();return discard;}
@@ -204,10 +208,10 @@ function entryCard(entry){
   const title=document.createElement('strong');title.textContent=entry.title||t('untitled');const details=document.createElement('small');const track=getTrack(entry.trackId);details.textContent=`${entry.moods.map(t).join(' · ')}${entry.moods.length?' / ':''}${t(entry.room)}${track?' · '+localized(track.title,lang):''}`;body.append(date,title,details);button.append(preview,body);button.addEventListener('click',()=>openEntry(entry));return button;
 }
 function emptyState(){const wrap=document.createElement('div');wrap.className='empty-state';const symbol=document.createElement('span');symbol.className='empty-icon';symbol.textContent='♬';symbol.setAttribute('aria-hidden','true');const strong=document.createElement('strong');strong.textContent=t('empty');const p=document.createElement('p');p.textContent=t('emptyHelp');wrap.append(symbol,strong,p);return wrap;}
-function renderEntries(){const sorted=[...entries].reverse().sort((a,b)=>b.date.localeCompare(a.date));$('recentEntries').replaceChildren(...(sorted.length?sorted.slice(0,6).map(entryCard):[emptyState()]));if($('calendarDialog').open)renderCalendar();}
+function renderEntries(){const sorted=[...entries].reverse().sort((a,b)=>b.date.localeCompare(a.date));$('recentEntries').replaceChildren(...(sorted.length?sorted.slice(0,6).map(entryCard):[emptyState()]));if($('calendarDialog').open)renderCalendar();if($('albumDialog').open){albumPlayer.stop();renderAlbum();}}
 async function openEntry(entry){
   if(!await canLeaveDraft())return;
-  await stopAudio();resetDraftContext();state=structuredClone(entry);loadedVersion=JSON.stringify(entry);editing=true;dirty=false;renderDraft();refreshDrafts();if($('calendarDialog').open)closeDialog($('calendarDialog'));window.scrollTo({top:0,behavior:'auto'});toast('opened');
+  await stopAudio();resetDraftContext();state=structuredClone(entry);loadedVersion=JSON.stringify(entry);editing=true;dirty=false;renderDraft();refreshDrafts();if($('calendarDialog').open)closeDialog($('calendarDialog'));if($('albumDialog').open)closeDialog($('albumDialog'));window.scrollTo({top:0,behavior:'auto'});toast('opened');
 }
 async function newDiary(date=localDate()){
   if(!await canLeaveDraft())return;
@@ -229,6 +233,41 @@ function renderCalendar(){
   const records=entries.filter(e=>e.date===selectedDay),p=document.createElement('p');p.textContent=selectedDay;
   const children=[p];if(records.length)children.push(...records.map(entryCard));else{const empty=document.createElement('p');empty.textContent=t('noDay');children.push(empty);}
   const create=document.createElement('button');create.className='secondary-button';create.textContent=t('dayWrite');create.addEventListener('click',()=>newDiary(selectedDay));children.push(create);$('dayEntries').replaceChildren(...children);
+}
+function albumEntries(){return entriesForMonth(entries,albumDate.getFullYear(),albumDate.getMonth());}
+function renderAlbum(){
+  const records=albumEntries(),summary=albumSummary(records);albumIndex=records.length?Math.max(0,Math.min(albumIndex,records.length-1)):0;
+  const chosen=records[albumIndex],month=albumDate.toLocaleDateString(locales[lang],{year:'numeric',month:'long'});
+  $('albumMonth').textContent=month;$('albumCoverMonth').textContent=month;
+  $('albumPreviousMonth').setAttribute('aria-label',t('albumPrevious'));$('albumNextMonth').setAttribute('aria-label',t('albumNext'));
+  $('albumPreviousMonth').disabled=albumDate.getFullYear()===0&&albumDate.getMonth()===0;$('albumNextMonth').disabled=albumDate.getFullYear()===9999&&albumDate.getMonth()===11;
+  $('albumCounts').textContent=t('albumCounts').replace('{days}',summary.days).replace('{entries}',summary.entries);
+  $('albumCoverImage').src=ROOM_ART[chosen?.room||'attic'].src;$('albumCover').dataset.empty=String(!chosen);
+  $('albumMoods').replaceChildren(...MOODS.filter(mood=>summary.moods[mood]).map(mood=>{const chip=document.createElement('span');chip.textContent=`${face[mood]} ${t(mood)} · ${summary.moods[mood]}`;return chip;}));
+  $('albumCurrent').textContent=chosen?`${chosen.date} · ${chosen.title||t('untitled')}`:t('albumNoSelection');
+  const available=nextAudible(records,0)!==-1;
+  $('albumStatus').textContent=albumError?t('errorAudio'):albumPlayer.loading?t('albumLoading'):albumPlayer.playing?t('albumPlaying'):albumPlayer.ended?t('albumEnded'):records.length&&!available?t('albumNoSound'):t('albumReady');
+  $('albumPlay').textContent=t(albumPlayer.playing||albumPlayer.loading?'albumStop':'albumPlay');$('albumPlay').disabled=!(albumPlayer.playing||albumPlayer.loading)&&nextAudible(records,albumIndex)===-1;
+  $('albumTrackCount').textContent=String(records.length);$('albumEmpty').hidden=records.length>0;
+  const active=document.activeElement,focusId=active?.dataset.albumId,focusAction=active?.dataset.albumAction;
+  const rows=records.map((entry,index)=>{
+    const row=document.createElement('article');row.className='album-track';row.dataset.selected=String(index===albumIndex);
+    const select=document.createElement('button');select.type='button';select.className='album-track-select';select.dataset.albumId=entry.id;select.dataset.albumAction='select';select.setAttribute('aria-pressed',String(index===albumIndex));select.setAttribute('aria-label',`${t('albumSelect')}: ${entry.date} · ${entry.title||t('untitled')}`);
+    const number=document.createElement('span');number.className='album-track-number';number.textContent=String(index+1).padStart(2,'0');
+    const art=document.createElement('img');art.src=ROOM_ART[entry.room].src;art.alt='';art.loading='lazy';
+    const body=document.createElement('span');body.className='album-track-info';const title=document.createElement('strong');title.textContent=entry.title||t('untitled');const details=document.createElement('small');const track=getTrack(entry.trackId);details.textContent=`${entry.date} · ${track?localized(track.title,lang):t('customTrack')}${canHear(entry)?'':` · ${t('albumMuted')}`}`;body.append(title,details);select.append(number,art,body);
+    select.addEventListener('click',()=>{albumIndex=index;albumError=false;if(albumPlayer.playing||albumPlayer.loading)albumPlayer.playFrom(records,index);else renderAlbum();});
+    const open=document.createElement('button');open.type='button';open.className='album-open text-button';open.dataset.albumId=entry.id;open.dataset.albumAction='open';open.textContent=t('albumOpen');open.setAttribute('aria-label',`${t('albumOpen')}: ${entry.title||t('untitled')}, ${entry.date}`);open.addEventListener('click',()=>openEntry(entry));row.append(select,open);return row;
+  });
+  $('albumTracks').replaceChildren(...rows);
+  if(focusId){[...$('albumTracks').querySelectorAll('button')].find(button=>button.dataset.albumId===focusId&&button.dataset.albumAction===focusAction)?.focus({preventScroll:true});}
+}
+async function openAlbum(){
+  await stopAudio();albumPlayer.stop();albumDate=new Date(new Date().getFullYear(),new Date().getMonth(),1,12);albumIndex=0;albumError=false;renderAlbum();showDialog('albumDialog');
+}
+function changeAlbumMonth(offset){
+  const total=albumDate.getFullYear()*12+albumDate.getMonth()+offset;if(total<0||total>9999*12+11)return;
+  albumPlayer.stop();const next=new Date(0);next.setFullYear(Math.floor(total/12),total%12,1);next.setHours(12,0,0,0);albumDate=next;albumIndex=0;albumError=false;renderAlbum();
 }
 function renderLanguage(){
   document.documentElement.lang=lang;document.title=`${t('brand')} · ${t('subtitle')}`;$('language').value=lang;
@@ -301,6 +340,9 @@ $('diaryForm').addEventListener('submit',async event=>{
 $('newEntry').addEventListener('click',()=>newDiary());
 $('deleteEntry').addEventListener('click',async()=>{if(locked||!editing||!await ask('deleteAsk','delete'))return;try{const latest=readEntries(localStorage);if(JSON.stringify(latest.find(e=>e.id===state.id))!==loadedVersion){toast('conflict');return;}const updated=latest.filter(e=>e.id!==state.id);writeEntries(localStorage,updated);entries=updated;dirty=false;finishActiveDraft();await newDiary(state.date);renderEntries();toast('deleted');}catch{toast('errorSave');}});
 for(const id of ['calendarNav','calendarMore'])$(id).addEventListener('click',()=>{selectedDay=state.date||localDate();calendarDate=new Date(selectedDay+'T12:00:00');calendarDate.setDate(1);renderCalendar();showDialog('calendarDialog');});
+for(const id of ['albumNav','albumMore'])$(id).addEventListener('click',openAlbum);
+for(const [id,offset]of [['albumPreviousMonth',-1],['albumNextMonth',1]])$(id).addEventListener('click',()=>changeAlbumMonth(offset));
+$('albumPlay').addEventListener('click',async()=>{if(albumPlayer.playing||albumPlayer.loading){albumPlayer.stop();return;}const records=albumEntries();if(nextAudible(records,albumIndex)===-1)return;albumError=false;await stopAudio();if($('albumDialog').open)albumPlayer.playFrom(records,albumIndex);});
 $('todayNav').addEventListener('click',()=>window.scrollTo({top:0,behavior:'auto'}));
 for(const [id,offset]of [['prevMonth',-1],['nextMonth',1]])$(id).addEventListener('click',()=>{calendarDate.setMonth(calendarDate.getMonth()+offset);renderCalendar();});
 $('language').addEventListener('change',()=>{lang=$('language').value;try{localStorage.setItem('roky-music-language',lang);}catch{}renderLanguage();});
@@ -321,8 +363,8 @@ for(const button of document.querySelectorAll('.close-dialog'))button.addEventLi
 for(const dialog of document.querySelectorAll('dialog:not(#confirmDialog)'))dialog.addEventListener('cancel',event=>{event.preventDefault();closeDialog(dialog);});
 $('confirmCancel').addEventListener('click',()=>finishConfirm(false));$('confirmAccept').addEventListener('click',()=>finishConfirm(true));$('confirmDialog').addEventListener('cancel',event=>{event.preventDefault();finishConfirm(false);});
 $('copyBank').addEventListener('click',async()=>{try{await navigator.clipboard.writeText('3333071025774');$('copyStatus').textContent=t('copied');}catch{$('copyStatus').textContent=t('copyFail');$('bankNumber').focus();$('bankNumber').select();}});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){flushDraft();if(audio.running){stopAudio();toast('hiddenPause');}}});
-window.addEventListener('pagehide',()=>{flushDraft();audio.stop();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){flushDraft();if(audio.running){stopAudio();toast('hiddenPause');}if(albumPlayer.playing||albumPlayer.loading)albumPlayer.stop();}});
+window.addEventListener('pagehide',()=>{flushDraft();audio.stop();albumPlayer.stop();});
 window.addEventListener('beforeunload',event=>{if(dirty&&!flushDraft()){event.preventDefault();event.returnValue='';}});
 window.addEventListener('storage',event=>{if(event.key?.startsWith(DRAFT_PREFIX)||event.key===null)refreshDrafts();if(event.key!==KEY&&event.key!==null)return;try{entries=readEntries(localStorage);renderEntries();}catch{locked=true;rawOriginal=event.newValue;rawDownloaded=false;updateSave();}});
 renderLanguage();
