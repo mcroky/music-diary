@@ -1,4 +1,4 @@
-const CACHE='roky-music-room-0.11.3';
+const CACHE='roky-music-room-0.11.4';
 const FILES=['./','./index.html','./styles.css','./room-art.css','./app.js','./platform.js','./privacy.html','./audio.js','./music.js','./catalog.js','./room-art.js','./storage.js','./drafts.js','./album.js','./album-export.js','./mp3-worker.js','./translations.js','./rewards.js','./assets/rooms/greenhouse.png','./icon.svg','./manifest.webmanifest',...['attic','bedroom','studio','cabin','seaside'].map(room=>`./assets/rooms/${room}.webp`),...['wasm-media-encoder.js','mp3.wasm','NOTICE.txt','LICENSE-MIT.txt','LICENSE-LAME.txt','LAME-NOTICE.txt'].map(file=>`./assets/vendor/mp3/${file}`)];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('roky-music-room-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
