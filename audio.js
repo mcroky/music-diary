@@ -3,16 +3,19 @@ import {getTrack,composeFrame,defaultArrangement} from './catalog.js';
 // All sounds are synthesized locally. No samples, microphones or network audio.
 export class RoomAudio {
   constructor(){this.context=null;this.running=false;this.layers={};this.sources=new Set();this.step=0;}
+  initialize(context,config){
+    this.context=context;
+    this.output=context.createGain();this.output.gain.value=0;
+    const limiter=context.createDynamicsCompressor();limiter.threshold.value=-18;limiter.knee.value=18;limiter.ratio.value=5;
+    this.output.connect(limiter);limiter.connect(context.destination);
+    this.tone=context.createBiquadFilter();this.tone.type='lowpass';this.tone.Q.value=.5;this.tone.connect(this.output);
+    for(const id of Object.keys(config.sounds)){const gain=context.createGain();gain.gain.value=0;gain.connect(['piano','drums','bass','keys','guitar','bell'].includes(id)?this.tone:this.output);this.layers[id]=gain;}
+    this.noise=context.createBuffer(1,context.sampleRate*5,context.sampleRate);
+    const data=this.noise.getChannelData(0);let seed=1729;for(let i=0;i<data.length;i++){seed=(seed*16807)%2147483647;data[i]=(seed/2147483647)*2-1;}
+  }
   async start(config){
     if(!this.context){
-      this.context=new (window.AudioContext||window.webkitAudioContext)();
-      this.output=this.context.createGain();this.output.gain.value=0;
-      const limiter=this.context.createDynamicsCompressor();limiter.threshold.value=-18;limiter.knee.value=18;limiter.ratio.value=5;
-      this.output.connect(limiter);limiter.connect(this.context.destination);
-      this.tone=this.context.createBiquadFilter();this.tone.type='lowpass';this.tone.Q.value=.5;this.tone.connect(this.output);
-      for(const id of Object.keys(config.sounds)){const gain=this.context.createGain();gain.gain.value=0;gain.connect(['piano','drums','bass','keys','guitar','bell'].includes(id)?this.tone:this.output);this.layers[id]=gain;}
-      this.noise=this.context.createBuffer(1,this.context.sampleRate*5,this.context.sampleRate);
-      const data=this.noise.getChannelData(0);let seed=1729;for(let i=0;i<data.length;i++){seed=(seed*16807)%2147483647;data[i]=(seed/2147483647)*2-1;}
+      this.initialize(new (window.AudioContext||window.webkitAudioContext)(),config);
     }
     await this.context.resume();
     if(this.context.state!=='running')throw new Error('AUDIO_UNAVAILABLE');
@@ -64,11 +67,12 @@ export class RoomAudio {
     const c=this.context,o=this.track(c.createOscillator()),g=c.createGain();o.frequency.setValueAtTime(125,at);o.frequency.exponentialRampToValueAtTime(42,at+.18);g.gain.setValueAtTime(.38,at);g.gain.exponentialRampToValueAtTime(.0001,at+.28);o.connect(g);g.connect(this.layers.drums);o.start(at);o.stop(at+.3);
   }
   chirp(at){const c=this.context,o=this.track(c.createOscillator()),g=c.createGain();o.frequency.setValueAtTime(2100,at);o.frequency.exponentialRampToValueAtTime(3400,at+.12);o.frequency.exponentialRampToValueAtTime(2300,at+.24);g.gain.setValueAtTime(0,at);g.gain.linearRampToValueAtTime(.09,at+.04);g.gain.exponentialRampToValueAtTime(.0001,at+.25);o.connect(g);g.connect(this.layers.birds);o.start(at);o.stop(at+.3);}
-  schedule(){
+  schedule(horizon){
     if(!this.running)return;
     const c=this.context;
     if(this.next<c.currentTime-.3)this.next=c.currentTime+.03;
-    while(this.next<c.currentTime+.22){
+    const end=horizon??c.currentTime+.22;
+    while(this.next<end){
       const s=this.step%32,beat=s%8,bar=Math.floor(s/8),t=this.next;
       // Keep one harmony throughout a bar while the tone filter follows the slider smoothly.
       if(beat===0){
