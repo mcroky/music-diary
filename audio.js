@@ -1,5 +1,6 @@
 import {legacyBrightness,musicExpression} from './music.js';
 import {getTrack,composeFrame,defaultArrangement} from './catalog.js';
+import {requestAudioFocus,abandonAudioFocus} from './platform.js';
 // All sounds are synthesized locally. No samples, microphones or network audio.
 export class RoomAudio {
   constructor(){this.context=null;this.running=false;this.layers={};this.sources=new Set();this.step=0;}
@@ -14,10 +15,14 @@ export class RoomAudio {
     const data=this.noise.getChannelData(0);let seed=1729;for(let i=0;i<data.length;i++){seed=(seed*16807)%2147483647;data[i]=(seed/2147483647)*2-1;}
   }
   async start(config){
+    const generation=this.generation=(this.generation||0)+1;
+    await requestAudioFocus();
+    if(generation!==this.generation||globalThis.document?.hidden)throw new Error('AUDIO_INTERRUPTED');
     if(!this.context){
       this.initialize(new (window.AudioContext||window.webkitAudioContext)(),config);
     }
     await this.context.resume();
+    if(generation!==this.generation||globalThis.document?.hidden)throw new Error('AUDIO_INTERRUPTED');
     if(this.context.state!=='running')throw new Error('AUDIO_UNAVAILABLE');
     this.config=config;this.update(config);
     if(this.running)return;
@@ -105,7 +110,9 @@ export class RoomAudio {
     }
   }
   async stop(){
-    this.running=false;clearInterval(this.clock);
+    this.generation=(this.generation||0)+1;
+    const wasRunning=this.running;this.running=false;clearInterval(this.clock);
+    if(wasRunning)await abandonAudioFocus().catch(()=>{});
     if(!this.context)return;
     this.output.gain.cancelScheduledValues(this.context.currentTime);this.output.gain.setTargetAtTime(0,this.context.currentTime,.025);
     const sources=[...this.sources];this.sources.clear();

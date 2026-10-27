@@ -1,5 +1,6 @@
 import {RoomAudio} from './audio.js';
-import {KEY,SOUNDS,MOODS,ROOMS,LIGHTS,WEATHERS,TIMES,readEntries,writeEntries,encodeBackup,parseBackup,mergeEntries,validateEntry} from './storage.js';
+import {KEY,SOUNDS,MOODS,ROOMS,LIGHTS,WEATHERS,TIMES,readEntries,readWallet,walletFromBackup,writeEntries,encodeBackup,parseBackup,mergeEntries,validateEntry} from './storage.js';
+import {emptyWallet,awardDays,mergeWallets,walletBalance,purchaseItem,spendDownload,refundDownload,SHOP_ITEMS} from './rewards.js';
 import {translate,locales} from './translations.js';
 import {musicExpression} from './music.js';
 import {CATEGORIES,TRACKS,getTrack,localized,LEADS,RHYTHMS,DENSITIES,defaultArrangement,trackLead} from './catalog.js';
@@ -7,6 +8,7 @@ import {ROOM_ART,loadRoomArtwork} from './room-art.js';
 import {DRAFT_PREFIX,DRAFT_POINTER,parseDraft,readDrafts,writeDraft,removeDraftBranch} from './drafts.js';
 import {entriesForMonth,albumSummary,canHear,nextAudible,AlbumPlayer} from './album.js';
 import {exportPlan,estimatedBytes,renderAlbumWav,renderAlbumMp3,MAX_WAV_BYTES,SAMPLE_RATE} from './album-export.js';
+import {isAndroid,saveFile,connectAndroid,minimizeApp} from './platform.js';
 const $=id=>document.getElementById(id);
 const face={calm:'◡',happy:'☺',sad:'☂',tired:'☾',hopeful:'✧',restless:'〰'};
 const icons={rain:'☂',fire:'♨',waves:'≋',wind:'〰',birds:'♧',cafe:'☕',piano:'♩',drums:'◉',bass:'♪',keys:'▥',guitar:'♬',bell:'♧'};
@@ -21,17 +23,35 @@ let timerEnd=0,sleepMinutes=0,timerTick,toastTimeout,confirmResolve;
 const audio=new RoomAudio(),lastFocus=new Map();
 let albumDate=new Date(new Date().getFullYear(),new Date().getMonth(),1,12),albumIndex=0,albumError=false;
 let albumExportJob=null,albumExportFeedback='';
+let dayExportJob=null,dayExportFeedback='',wallet=emptyWallet();
 const albumAudio=new RoomAudio();
 const albumPlayer=new AlbumPlayer(albumAudio,{onChange:player=>{if(player.index>=0)albumIndex=player.index;if($('albumDialog')?.open)renderAlbum();},onError:()=>{albumError=true;if($('albumDialog').open)renderAlbum();}});
 let catalogCategory='all',catalogQuery='',catalogLimit=8;
 let draftId=crypto.randomUUID(),draftParent=null,lastDraft=null,draftStatus='idle',draftSavedAt=0,draftTimer,maxDraftTimer,draftFailureNotified=false;
 let draftCatalogue={drafts:[],records:[],invalid:[]},draftReadFailed=false;
-try{entries=readEntries(localStorage);}catch{locked=true;try{rawOriginal=localStorage.getItem(KEY);}catch{}}
+try{entries=readEntries(localStorage);wallet=awardDays(readWallet(localStorage),entries);}catch{locked=true;try{rawOriginal=localStorage.getItem(KEY);}catch{}}
+const owns=id=>wallet.purchases.includes(id);
+function updateWallet(change){
+  const latest=readEntries(localStorage),current=awardDays(readWallet(localStorage),latest),next=change(current);
+  writeEntries(localStorage,latest,next);entries=latest;wallet=next;return next;
+}
+function refreshRewards(){if($('rewardBalance'))$('rewardBalance').textContent=String(walletBalance(wallet));if($('shopDialog')?.open)renderShop();}
+async function saveAudioWithReward(blob,name,signal){
+  if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
+  const id=crypto.randomUUID();updateWallet(w=>spendDownload(w,id));refreshRewards();
+  try{if(signal?.aborted)throw new DOMException('Cancelled','AbortError');await saveFile(blob,name,{signal});}
+  catch(error){try{updateWallet(w=>refundDownload(w,id));refreshRewards();}catch{throw new Error('REWARD_REFUND_FAILED');}throw error;}
+}
 function toast(key){clearTimeout(toastTimeout);$('toast').textContent=t(key);$('toast').classList.add('show');toastTimeout=setTimeout(()=>$('toast').classList.remove('show'),5200);}
-function download(data,name){const blob=new Blob([data],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-function downloadAudio(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);}
+async function download(data,name){await saveFile(new Blob([data],{type:'application/json'}),name);}
+async function backupFile(button,data,name,onSuccess){
+  button.disabled=true;
+  try{await download(data,name);onSuccess?.();toast(isAndroid?'fileSaved':'exported');}
+  catch(error){toast(error?.name==='AbortError'?'fileCancelled':'fileSaveFailed');}
+  finally{button.disabled=false;}
+}
 function showDialog(id){const dialog=$(id);lastFocus.set(dialog,document.activeElement);if(!dialog.open)dialog.showModal();}
-function closeDialog(dialog){if(dialog.id==='immersionDialog'){$('roomChoices').before($('roomScene'));document.body.classList.remove('is-immersed');}if(dialog.id==='albumDialog'){cancelAlbumExport();albumPlayer.stop();}dialog.close();lastFocus.get(dialog)?.focus();}
+function closeDialog(dialog){if(dialog.id==='immersionDialog'){$('roomChoices').before($('roomScene'));document.body.classList.remove('is-immersed');}if(dialog.id==='albumDialog'){cancelAlbumExport();albumPlayer.stop();}if(dialog.id==='dayExportDialog')cancelDayExport();dialog.close();lastFocus.get(dialog)?.focus();}
 function ask(key,accept){$('confirmText').textContent=t(key);$('confirmAccept').textContent=t(accept);showDialog('confirmDialog');return new Promise(resolve=>{confirmResolve=resolve;});}
 function finishConfirm(result){closeDialog($('confirmDialog'));confirmResolve?.(result);confirmResolve=null;}
 async function canLeaveDraft(){if(!dirty||flushDraft())return true;const discard=await ask('draftWarn','discard');if(discard)finishActiveDraft();return discard;}
@@ -106,7 +126,7 @@ function renderMoods(){
 function renderSettings(){
   const field=(id,options)=>{const label=document.createElement('label');label.className='setting-field';const span=document.createElement('span');span.textContent=t(id);const select=document.createElement('select');select.id=`setting-${id}`;select.setAttribute('aria-label',t(id));for(const value of options){const option=new Option(t(value),value);select.add(option);}select.value=state[id];select.addEventListener('change',()=>{state[id]=select.value;markDirty();updateScene();});label.append(span,select);return label;};
   const pair=document.createElement('div');pair.className='setting-pair';pair.append(field('weather',WEATHERS),field('time',TIMES));
-  $('sceneControls').replaceChildren(field('room',ROOMS),field('light',LIGHTS),pair);
+  $('sceneControls').replaceChildren(field('room',ROOMS.filter(room=>room!=='greenhouse'||owns('room-greenhouse')||state.room===room)),field('light',LIGHTS),pair);
   $('sleepTimer').replaceChildren(...[0,15,30,60].map(v=>new Option(v?`${v} ${t('minutes')}`:t('none'),String(v))));$('sleepTimer').value=String(sleepMinutes);
 }
 function renderSounds(){
@@ -136,7 +156,7 @@ function revealSelectedRoom(){const row=$('roomChoices'),selected=row.querySelec
 function sceneState(status){$('roomScene').dataset.status=status;$('sceneStatusText').textContent=t(status==='error'?'sceneError':'sceneLoading');$('retryScene').hidden=status!=='error';}
 function renderRoomChoices(){
   $('roomChoices').setAttribute('aria-label',t('room'));
-  $('roomChoices').replaceChildren(...ROOMS.map(room=>{const button=document.createElement('button');button.className='room-thumbnail';button.dataset.room=room;button.setAttribute('aria-pressed',String(state.room===room));const image=document.createElement('img');image.src=ROOM_ART[room].src;image.alt='';image.loading='lazy';image.decoding='async';const label=document.createElement('span');label.textContent=t(room);button.append(image,label);button.addEventListener('click',()=>chooseRoom(room));return button;}));
+  $('roomChoices').replaceChildren(...ROOMS.filter(room=>room!=='greenhouse'||owns('room-greenhouse')||state.room===room).map(room=>{const button=document.createElement('button');button.className='room-thumbnail';button.dataset.room=room;button.setAttribute('aria-pressed',String(state.room===room));const image=document.createElement('img');image.src=ROOM_ART[room].src;image.alt='';image.loading='lazy';image.decoding='async';const label=document.createElement('span');label.textContent=t(room);button.append(image,label);button.addEventListener('click',()=>chooseRoom(room));return button;}));
 }
 function chooseRoom(room){state.room=room;$('setting-room').value=room;markDirty();updateScene();}
 function updatePlayer(){
@@ -169,7 +189,8 @@ function renderTrackCards(){
     const category=CATEGORIES.find(c=>c.id===track.category),card=document.createElement('button');card.id=`track-${track.id}`;card.className='track-card';card.setAttribute('aria-pressed',String(track.id===state.trackId));card.setAttribute('aria-label',`${t('chooseTrack')}: ${localized(track.title,lang)}`);
     const cover=document.createElement('span');cover.className='track-cover';cover.style.setProperty('--cover',category.color);cover.setAttribute('aria-hidden','true');const icon=document.createElement('span');icon.textContent=category.icon;const num=document.createElement('small');num.textContent=String(track.seed+1).padStart(2,'0');cover.append(icon,num);
     const title=document.createElement('strong');title.textContent=localized(track.title,lang);const meta=document.createElement('small');const seconds=Math.round(3840/track.tempo);const duration=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;meta.textContent=`${localized(category.title,lang)} · ${track.tempo} BPM · ${duration} ${t('loopLabel')}`;card.setAttribute('aria-label',`${t('chooseTrack')}: ${localized(track.title,lang)}, ${meta.textContent}`);
-    const action=document.createElement('span');action.className='track-action';action.textContent=track.id===state.trackId?`✓ ${t('selectedTrack')}`:t('chooseTrack');card.append(cover,title,meta,action);card.addEventListener('click',()=>selectTrack(track));return card;
+    const lockedTrack=Object.hasOwn(SHOP_ITEMS,`track-${track.id}`)&&!owns(`track-${track.id}`)&&track.id!==state.trackId;
+    const action=document.createElement('span');action.className='track-action';action.textContent=lockedTrack?t('shopUnlock'):track.id===state.trackId?`✓ ${t('selectedTrack')}`:t('chooseTrack');if(lockedTrack)card.setAttribute('aria-label',`${localized(track.title,lang)}: ${t('shopUnlock')}`);card.append(cover,title,meta,action);card.addEventListener('click',()=>{if(lockedTrack){renderShop();showDialog('shopDialog');}else selectTrack(track);});return card;
   });
   if(!cards.length){const empty=document.createElement('p');empty.className='catalog-empty';empty.textContent=t('noTracks');cards.push(empty);}
   $('trackGrid').replaceChildren(...cards);$('catalogCount').textContent=`${tracks.length} / ${TRACKS.length}`;$('moreTracks').hidden=tracks.length<=catalogLimit;
@@ -238,24 +259,62 @@ function renderCalendar(){
   const create=document.createElement('button');create.className='secondary-button';create.textContent=t('dayWrite');create.addEventListener('click',()=>newDiary(selectedDay));children.push(create);$('dayEntries').replaceChildren(...children);
 }
 function albumEntries(){return entriesForMonth(entries,albumDate.getFullYear(),albumDate.getMonth());}
+function renderShop(){
+  $('shopBalance').textContent=t('rewardBalance').replace('{count}',walletBalance(wallet));
+  $('shopItems').replaceChildren(...Object.entries(SHOP_ITEMS).map(([id,item])=>{
+    const row=document.createElement('article');row.className='shop-item';
+    const body=document.createElement('div'),title=document.createElement('strong'),description=document.createElement('p');
+    title.textContent=item.kind==='room'?t('greenhouse'):localized(getTrack(item.value).title,lang);
+    description.textContent=item.kind==='room'?t('shopRoomHelp'):t('shopTrackHelp');body.append(title,description);
+    const button=document.createElement('button');button.type='button';button.className='secondary-button';button.disabled=locked||owns(id)||walletBalance(wallet)<item.cost;
+    button.textContent=owns(id)?t('shopOwned'):t('shopPrice').replace('{count}',item.cost);
+    button.addEventListener('click',()=>{try{updateWallet(w=>purchaseItem(w,id));refreshRewards();renderRoomChoices();renderSettings();renderTrackCards();toast('shopPurchased');}catch(error){toast(error.message==='INSUFFICIENT_NOTES'?'rewardNotEnough':'errorSave');}});
+    if(item.kind==='room'){const image=document.createElement('img');image.src=ROOM_ART[item.value].src;image.alt='';image.loading='lazy';row.append(image);}row.append(body,button);return row;
+  }));
+}
+function renderDayExport(){
+  const plan=exportPlan([state],$('dayExportMode').value),format=$('dayExportFormat').value,job=dayExportJob;
+  const supported=Boolean(globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext)&&(format==='wav'||typeof Worker==='function'&&typeof WebAssembly==='object');
+  const seconds=Math.round(plan.frames/SAMPLE_RATE),duration=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
+  $('dayExportEstimate').textContent=t('dayExportEstimate').replace('{duration}',duration).replace('{size}',(estimatedBytes(plan,format)/1_000_000).toFixed(1));
+  $('dayExportFormat').disabled=Boolean(job);$('dayExportMode').disabled=Boolean(job);
+  $('dayExportStart').disabled=Boolean(job)||locked||!supported||!plan.segments.length||walletBalance(wallet)<1;
+  $('dayExportCancel').hidden=!job;$('dayExportCancel').disabled=Boolean(job?.controller.signal.aborted);
+  $('dayExportProgress').hidden=!job;if(job){$('dayExportProgress').max=job.total;$('dayExportProgress').value=job.done;}
+  $('dayExportStatus').textContent=job?(job.controller.signal.aborted?t('albumExportCancelling'):t('albumExportWorking').replace('{done}',job.done).replace('{total}',job.total)):dayExportFeedback?t(dayExportFeedback):!supported?t('albumExportUnavailable'):!plan.segments.length?t('noSounds'):walletBalance(wallet)<1?t('rewardNotEnough'):'';
+}
+function cancelDayExport(){if(dayExportJob){dayExportJob.controller.abort();if($('dayExportDialog').open)renderDayExport();}}
+async function exportDay(){
+  if(dayExportJob)return;
+  const entry=structuredClone(state),format=$('dayExportFormat').value,plan=exportPlan([entry],$('dayExportMode').value);
+  if(!plan.segments.length||locked||walletBalance(wallet)<1||!(globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext)||(format==='mp3'&&(typeof Worker!=='function'||typeof WebAssembly!=='object')))return;
+  const job={controller:new AbortController(),done:0,total:1};dayExportJob=job;dayExportFeedback='';renderDayExport();$('dayExportCancel').focus();
+  try{
+    await stopAudio();await albumPlayer.stop();
+    const blob=await (format==='mp3'?renderAlbumMp3:renderAlbumWav)(plan,{signal:job.controller.signal,onProgress:(done,total)=>{job.done=done;job.total=total;if($('dayExportDialog').open)renderDayExport();}});
+    if(job.controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
+    await saveAudioWithReward(blob,`roky-music-day-${entry.date||localDate()}.${format}`,job.controller.signal);dayExportFeedback=isAndroid?'fileSaved':'dayExportDone';
+  }catch(error){dayExportFeedback=error?.name==='AbortError'?'albumExportCancelled':error.message==='INSUFFICIENT_NOTES'?'rewardNotEnough':'albumExportFailed';}
+  finally{if(dayExportJob===job)dayExportJob=null;if($('dayExportDialog').open){renderDayExport();$('dayExportStart').focus();}}
+}
 function renderAlbumExport(records=albumEntries()){
   const mode=$('albumExportMode').value,format=$('albumExportFormat').value,plan=exportPlan(records,mode),supported=Boolean(globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext)&&(format==='wav'||(typeof Worker==='function'&&typeof WebAssembly==='object')),job=albumExportJob;
   const seconds=Math.round(plan.frames/SAMPLE_RATE),duration=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`,size=(estimatedBytes(plan,format)/1_000_000).toFixed(1);
   let estimate=t('albumExportEstimate').replace('{count}',plan.segments.length).replace('{duration}',duration).replace('{size}',size);
   if(plan.skipped)estimate+=` ${t('albumExportSkipped').replace('{count}',plan.skipped)}`;
   $('albumExportEstimate').textContent=estimate;
-  $('albumExportMode').disabled=Boolean(job);$('albumExportFormat').disabled=Boolean(job);$('albumExport').disabled=Boolean(job)||!supported||!plan.segments.length||plan.bytes>MAX_WAV_BYTES;
+  $('albumExportMode').disabled=Boolean(job);$('albumExportFormat').disabled=Boolean(job);$('albumExport').disabled=Boolean(job)||locked||!supported||!plan.segments.length||plan.bytes>MAX_WAV_BYTES||walletBalance(wallet)<1;
   $('albumExportCancel').hidden=!job;$('albumExportCancel').disabled=Boolean(job?.controller.signal.aborted);
   $('albumExportProgress').setAttribute('aria-label',t('albumExportTitle'));$('albumExportProgress').hidden=!job;if(job){$('albumExportProgress').max=job.total;$('albumExportProgress').value=job.done;}
   let status=job?(job.controller.signal.aborted?t('albumExportCancelling'):t('albumExportWorking').replace('{done}',job.done).replace('{total}',job.total)):
-    albumExportFeedback?t(albumExportFeedback):!supported?t('albumExportUnavailable'):plan.bytes>MAX_WAV_BYTES?t('albumExportLarge'):'';
+    albumExportFeedback?t(albumExportFeedback):!supported?t('albumExportUnavailable'):plan.bytes>MAX_WAV_BYTES?t('albumExportLarge'):walletBalance(wallet)<1?t('rewardNotEnough'):'';
   if($('albumExportStatus').textContent!==status)$('albumExportStatus').textContent=status;
 }
 function cancelAlbumExport(){if(!albumExportJob)return;albumExportJob.controller.abort();if($('albumDialog').open)renderAlbumExport();}
 async function exportAlbum(){
   if(albumExportJob)return;
   const records=structuredClone(albumEntries()),format=$('albumExportFormat').value,plan=exportPlan(records,$('albumExportMode').value);
-  if(!plan.segments.length||plan.bytes>MAX_WAV_BYTES||!(globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext)||(format==='mp3'&&(typeof Worker!=='function'||typeof WebAssembly!=='object')))return;
+  if(!plan.segments.length||locked||walletBalance(wallet)<1||plan.bytes>MAX_WAV_BYTES||!(globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext)||(format==='mp3'&&(typeof Worker!=='function'||typeof WebAssembly!=='object')))return;
   const filename=`roky-music-album-${String(albumDate.getFullYear()).padStart(4,'0')}-${String(albumDate.getMonth()+1).padStart(2,'0')}.${format}`;
   const job={controller:new AbortController(),done:0,total:plan.segments.length};albumExportJob=job;albumExportFeedback='';renderAlbum();$('albumExportCancel').focus();
   try{
@@ -263,8 +322,8 @@ async function exportAlbum(){
     const render=format==='mp3'?renderAlbumMp3:renderAlbumWav;
     const blob=await render(plan,{signal:job.controller.signal,onProgress:(done,total)=>{job.done=done;job.total=total;if($('albumDialog').open)renderAlbumExport();}});
     if(job.controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
-    downloadAudio(blob,filename);albumExportFeedback='albumExportDone';
-  }catch(error){albumExportFeedback=error?.name==='AbortError'?'albumExportCancelled':'albumExportFailed';}
+    await saveAudioWithReward(blob,filename,job.controller.signal);albumExportFeedback=isAndroid?'fileSaved':'albumExportDone';
+  }catch(error){albumExportFeedback=error?.name==='AbortError'?'albumExportCancelled':error.message==='INSUFFICIENT_NOTES'?'rewardNotEnough':'albumExportFailed';}
   finally{if(albumExportJob===job)albumExportJob=null;if($('albumDialog').open){renderAlbum();$('albumExport').focus();}}
 }
 function renderAlbum(){
@@ -306,11 +365,12 @@ function changeAlbumMonth(offset){
 function renderLanguage(){
   document.documentElement.lang=lang;document.title=`${t('brand')} · ${t('subtitle')}`;$('language').value=lang;
   for(const el of document.querySelectorAll('[data-i18n]'))el.textContent=t(el.dataset.i18n);
+  if(isAndroid)for(const el of document.querySelectorAll('[data-i18n="localNotice"]'))el.textContent=t('androidLocalNotice');
   for(const el of document.querySelectorAll('[data-placeholder]'))el.placeholder=t(el.dataset.placeholder);
   for(const el of document.querySelectorAll('.close-dialog'))el.setAttribute('aria-label',t('close'));
   for(const el of document.querySelectorAll('a[target="_blank"]'))el.setAttribute('aria-label',`${el.textContent.trim()} (${t('newTab')})`);
   $('master').setAttribute('aria-label',t('master'));$('tempo').setAttribute('aria-label',t('tempo'));
-  renderDraft();renderEntries();refreshDrafts();if($('calendarDialog').open)renderCalendar();
+  renderDraft();renderEntries();refreshDrafts();refreshRewards();if($('calendarDialog').open)renderCalendar();if($('dayExportDialog').open)renderDayExport();if($('albumDialog').open)renderAlbum();
 }
 function restartTimer(){
   clearInterval(timerTick);timerEnd=0;
@@ -368,11 +428,12 @@ $('diaryForm').addEventListener('submit',async event=>{
       safe.id=crypto.randomUUID();latest=readEntries(localStorage);
     }
     const updated=latest.some(e=>e.id===safe.id)?latest.map(e=>e.id===safe.id?safe:e):[...latest,safe];
-    writeEntries(localStorage,updated);entries=updated;state=safe;loadedVersion=JSON.stringify(safe);editing=true;dirty=false;finishActiveDraft();updateSave();renderEntries();toast('saved');
+    const previousWallet=awardDays(readWallet(localStorage),latest),next=awardDays(previousWallet,updated),earned=next.days.length>previousWallet.days.length;
+    writeEntries(localStorage,updated,next);wallet=next;entries=updated;state=safe;loadedVersion=JSON.stringify(safe);editing=true;dirty=false;finishActiveDraft();updateSave();renderEntries();refreshRewards();toast(earned?'rewardEarned':'saved');
   }catch{toast('errorSave');}
 });
 $('newEntry').addEventListener('click',()=>newDiary());
-$('deleteEntry').addEventListener('click',async()=>{if(locked||!editing||!await ask('deleteAsk','delete'))return;try{const latest=readEntries(localStorage);if(JSON.stringify(latest.find(e=>e.id===state.id))!==loadedVersion){toast('conflict');return;}const updated=latest.filter(e=>e.id!==state.id);writeEntries(localStorage,updated);entries=updated;dirty=false;finishActiveDraft();await newDiary(state.date);renderEntries();toast('deleted');}catch{toast('errorSave');}});
+$('deleteEntry').addEventListener('click',async()=>{if(locked||!editing||!await ask('deleteAsk','delete'))return;try{const latest=readEntries(localStorage);if(JSON.stringify(latest.find(e=>e.id===state.id))!==loadedVersion){toast('conflict');return;}const updated=latest.filter(e=>e.id!==state.id),next=awardDays(readWallet(localStorage),latest);writeEntries(localStorage,updated,next);wallet=next;entries=updated;dirty=false;finishActiveDraft();await newDiary(state.date);renderEntries();refreshRewards();toast('deleted');}catch{toast('errorSave');}});
 for(const id of ['calendarNav','calendarMore'])$(id).addEventListener('click',()=>{selectedDay=state.date||localDate();calendarDate=new Date(selectedDay+'T12:00:00');calendarDate.setDate(1);renderCalendar();showDialog('calendarDialog');});
 for(const id of ['albumNav','albumMore'])$(id).addEventListener('click',openAlbum);
 for(const [id,offset]of [['albumPreviousMonth',-1],['albumNextMonth',1]])$(id).addEventListener('click',()=>changeAlbumMonth(offset));
@@ -380,6 +441,10 @@ $('albumPlay').addEventListener('click',async()=>{if(albumPlayer.playing||albumP
 $('albumExportMode').addEventListener('change',()=>{albumExportFeedback='';renderAlbumExport();});
 $('albumExportFormat').addEventListener('change',()=>{albumExportFeedback='';renderAlbumExport();});
 $('albumExport').addEventListener('click',exportAlbum);$('albumExportCancel').addEventListener('click',cancelAlbumExport);
+$('shopNav').addEventListener('click',()=>{renderShop();showDialog('shopDialog');});
+$('dayExportOpen').addEventListener('click',()=>{dayExportFeedback='';renderDayExport();showDialog('dayExportDialog');});
+for(const id of ['dayExportFormat','dayExportMode'])$(id).addEventListener('change',()=>{dayExportFeedback='';renderDayExport();});
+$('dayExportStart').addEventListener('click',exportDay);$('dayExportCancel').addEventListener('click',cancelDayExport);
 $('todayNav').addEventListener('click',()=>window.scrollTo({top:0,behavior:'auto'}));
 for(const [id,offset]of [['prevMonth',-1],['nextMonth',1]])$(id).addEventListener('click',()=>{calendarDate.setMonth(calendarDate.getMonth()+offset);renderCalendar();});
 $('language').addEventListener('change',()=>{lang=$('language').value;try{localStorage.setItem('roky-music-language',lang);}catch{}renderLanguage();});
@@ -387,25 +452,36 @@ $('manageDrafts').addEventListener('click',()=>{if(dirty)flushDraft();refreshDra
 $('bannerDrafts').addEventListener('click',()=>{refreshDrafts();renderDraftManager();showDialog('draftsDialog');});
 $('resumeLatestDraft').addEventListener('click',()=>{const source=draftCatalogue.drafts.find(d=>d.id!==draftId);if(source)recoverDraft(source);});
 $('retryDraftSave').addEventListener('click',()=>{draftStatus='pending';flushDraft();});
-$('exportDraftOriginal').addEventListener('click',()=>{download(JSON.stringify({app:'roky-music-draft-recovery',exportedAt:new Date().toISOString(),originals:draftCatalogue.invalid},null,2),`roky-draft-originals-${Date.now()}.json`);});
-$('export').addEventListener('click',()=>{if(locked){$('rawBackup').click();return;}download(encodeBackup(entries),`roky-music-diary-${localDate()}.json`);toast('exported');});
-$('rawBackup').addEventListener('click',()=>{if(rawOriginal===null){toast('errorLoad');return;}download(rawOriginal,`roky-original-${Date.now()}.json`);rawDownloaded=true;toast('exported');});
+$('exportDraftOriginal').addEventListener('click',()=>backupFile($('exportDraftOriginal'),JSON.stringify({app:'roky-music-draft-recovery',exportedAt:new Date().toISOString(),originals:draftCatalogue.invalid},null,2),`roky-draft-originals-${Date.now()}.json`));
+$('export').addEventListener('click',()=>{if(locked){$('rawBackup').click();return;}try{const latest=readEntries(localStorage),current=awardDays(readWallet(localStorage),latest);backupFile($('export'),encodeBackup(latest,current),`roky-music-diary-${localDate()}.json`);}catch{toast('errorLoad');}});
+$('rawBackup').addEventListener('click',()=>{if(rawOriginal===null){toast('errorLoad');return;}const original=rawOriginal;backupFile($('rawBackup'),original,`roky-original-${Date.now()}.json`,()=>{if(rawOriginal===original)rawDownloaded=true;});});
 $('import').addEventListener('click',()=>{if(locked&&!rawDownloaded){toast('errorLoad');$('storageError').scrollIntoView({behavior:'smooth',block:'center'});return;}$('importFile').click();});
 $('importFile').addEventListener('change',async()=>{
   const file=$('importFile').files[0];if(!file)return;
-  try{if(file.size>5_000_000)throw new Error('TOO_LARGE');const imported=parseBackup(await file.text());const updated=locked?imported:mergeEntries(readEntries(localStorage),imported);writeEntries(localStorage,updated);entries=updated;locked=false;updateSave();renderEntries();toast('imported');}catch(error){toast(error?.name==='QuotaExceededError'||error?.name==='SecurityError'?'errorSave':'invalidBackup');}finally{$('importFile').value='';}
+  try{if(file.size>5_000_000)throw new Error('TOO_LARGE');const raw=await file.text(),imported=parseBackup(raw),incoming=walletFromBackup(raw),updated=locked?imported:mergeEntries(readEntries(localStorage),imported),current=locked?emptyWallet():readWallet(localStorage),next=awardDays(mergeWallets(current,incoming),updated);writeEntries(localStorage,updated,next);wallet=next;entries=updated;locked=false;updateSave();renderEntries();refreshRewards();renderDraft();toast('imported');}catch(error){toast(error?.name==='QuotaExceededError'||error?.name==='SecurityError'?'errorSave':'invalidBackup');}finally{$('importFile').value='';}
 });
 for(const button of document.querySelectorAll('[data-dialog]'))button.addEventListener('click',()=>showDialog(button.dataset.dialog));
 for(const button of document.querySelectorAll('.close-dialog'))button.addEventListener('click',()=>closeDialog(button.closest('dialog')));
 for(const dialog of document.querySelectorAll('dialog:not(#confirmDialog)'))dialog.addEventListener('cancel',event=>{event.preventDefault();closeDialog(dialog);});
 $('confirmCancel').addEventListener('click',()=>finishConfirm(false));$('confirmAccept').addEventListener('click',()=>finishConfirm(true));$('confirmDialog').addEventListener('cancel',event=>{event.preventDefault();finishConfirm(false);});
-$('copyBank').addEventListener('click',async()=>{try{await navigator.clipboard.writeText('3333071025774');$('copyStatus').textContent=t('copied');}catch{$('copyStatus').textContent=t('copyFail');$('bankNumber').focus();$('bankNumber').select();}});
+$('copyBank')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText('3333071025774');$('copyStatus').textContent=t('copied');}catch{$('copyStatus').textContent=t('copyFail');$('bankNumber').focus();$('bankNumber').select();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){flushDraft();if(audio.running){stopAudio();toast('hiddenPause');}if(albumPlayer.playing||albumPlayer.loading)albumPlayer.stop();}});
-window.addEventListener('pagehide',()=>{flushDraft();cancelAlbumExport();audio.stop();albumPlayer.stop();});
+function pauseAndroid(){flushDraft();stopAudio();albumPlayer.stop();}
+let backPending=false;
+connectAndroid({onPause:pauseAndroid,onBack:async()=>{
+  if(backPending)return;backPending=true;
+  try{
+    const dialog=[...document.querySelectorAll('dialog[open]')].at(-1);
+    if(dialog){if(dialog.id==='confirmDialog')finishConfirm(false);else closeDialog(dialog);return;}
+    if(window.scrollY>20){window.scrollTo({top:0,behavior:'auto'});return;}
+    if(await canLeaveDraft()){pauseAndroid();await minimizeApp();}
+  }finally{backPending=false;}
+}}).catch(()=>toast('androidConnectionFailed'));
+window.addEventListener('pagehide',()=>{flushDraft();cancelAlbumExport();cancelDayExport();audio.stop();albumPlayer.stop();});
 window.addEventListener('beforeunload',event=>{if(dirty&&!flushDraft()){event.preventDefault();event.returnValue='';}});
-window.addEventListener('storage',event=>{if(event.key?.startsWith(DRAFT_PREFIX)||event.key===null)refreshDrafts();if(event.key!==KEY&&event.key!==null)return;try{entries=readEntries(localStorage);renderEntries();}catch{locked=true;rawOriginal=event.newValue;rawDownloaded=false;updateSave();}});
+window.addEventListener('storage',event=>{if(event.key?.startsWith(DRAFT_PREFIX)||event.key===null)refreshDrafts();if(event.key!==KEY&&event.key!==null)return;try{entries=readEntries(localStorage);wallet=awardDays(readWallet(localStorage),entries);renderEntries();refreshRewards();renderRoomChoices();renderSettings();renderTrackCards();if($('albumDialog').open)renderAlbum();if($('dayExportDialog').open)renderDayExport();}catch{locked=true;rawOriginal=event.newValue;rawDownloaded=false;updateSave();}});
 renderLanguage();
 try{const pointer=sessionStorage.getItem(DRAFT_POINTER),source=draftCatalogue.drafts.find(d=>d.id===pointer);if(source)applyRecoveredDraft(source);}catch{}
 if('ResizeObserver'in window)new ResizeObserver(revealSelectedRoom).observe($('roomChoices'));
 else window.addEventListener('resize',revealSelectedRoom);
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{/* Online use remains available if offline caching is blocked. */});
+if(!isAndroid&&'serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{/* Online use remains available if offline caching is blocked. */});

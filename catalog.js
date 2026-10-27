@@ -13,7 +13,11 @@ export const CATEGORIES=[
  ['memory','◷',['추억과 그리움','Memories','思い出','回忆思念'],'#baa0a5',57,62,22],
  ['hope','✧',['설렘과 시작','New beginnings','ときめく始まり','心动启程'],'#c2b276',64,92,88],
  ['dream','✦',['몽환적인 꿈','Daydreams','夢うつつ','梦幻'],'#a6a0bc',59,58,48],
- ['rest','◡',['잠들기 전','Before sleep','おやすみ前','睡前'],'#abae9d',60,52,45]
+ ['rest','◡',['잠들기 전','Before sleep','おやすみ前','睡前'],'#abae9d',60,52,45],
+ ['energy','⚡',['신나는 에너지','Feel the energy','元気いっぱい','活力满满'],'#e69f75',60,114,94],
+ ['upbeat','☀',['경쾌한 하루','Upbeat day','軽やかな一日','轻快的一天'],'#e5bd78',62,108,96],
+ ['party','✺',['파티 타임','Party time','パーティータイム','派对时光'],'#cd93a7',60,116,94],
+ ['pop','♫',['반짝이는 팝','Bright pop','きらめくポップ','闪亮流行'],'#a79bc7',62,110,90]
 ].map(([id,icon,title,color,tonic,tempo,brightness])=>({id,icon,title,color,tonic,tempo,brightness}));
 
 const TITLES=[
@@ -28,7 +32,11 @@ const TITLES=[
  [['오래된 사진 뒷면','The back of an old photograph','古い写真の裏側','旧照片的背面'],['그때의 우리에게','To who we were','あの頃の私たちへ','致当时的我们'],['다시 읽는 편지','A letter read again','読み返す手紙','重读那封信'],['돌아갈 수 없는 계절','A season we can’t return to','戻れない季節','回不去的季节']],
  [['첫 장을 펼치는 마음','Opening the first page','最初のページを開く気持ち','翻开第一页'],['아직 모르는 좋은 일','Good things yet unknown','まだ知らないいいこと','尚未遇见的好事'],['내일로 가는 작은 문','A small door to tomorrow','明日へ続く小さな扉','通往明天的小门'],['새로운 봄의 예감','A hint of a new spring','新しい春の予感','新春的预感']],
  [['구름 위 우체국','A post office in the clouds','雲の上の郵便局','云上的邮局'],['물속에 잠긴 별','A star beneath the water','水に沈んだ星','水下的星星'],['보랏빛 안개의 정원','A garden of violet mist','紫の霧の庭','紫雾花园'],['아주 느린 시간 여행','A very slow journey through time','とてもゆっくりな時間旅行','缓慢的时间旅行']],
- [['불을 끄기 십 분 전','Ten minutes before lights out','消灯まであと十分','熄灯前十分钟'],['베개 옆 작은 멜로디','A melody beside the pillow','枕元の小さなメロディー','枕边的小旋律'],['긴 하루를 내려놓고','Setting down a long day','長い一日を置いて','放下漫长的一天'],['좋은 꿈의 입구','The doorway to a good dream','いい夢の入り口','好梦的入口']]
+ [['불을 끄기 십 분 전','Ten minutes before lights out','消灯まであと十分','熄灯前十分钟'],['베개 옆 작은 멜로디','A melody beside the pillow','枕元の小さなメロディー','枕边的小旋律'],['긴 하루를 내려놓고','Setting down a long day','長い一日を置いて','放下漫长的一天'],['좋은 꿈의 입구','The doorway to a good dream','いい夢の入り口','好梦的入口']],
+ [['두근두근 출발','Ready, set, sparkle','わくわく出発','心动出发'],['발걸음에 날개를','Wings on my feet','足取りに翼を','脚步长出翅膀'],['기분 좋은 질주','A joyful dash','気分よく駆け出そう','快乐向前冲'],['오늘은 내가 주인공','Today is my day','今日の主役は私','今天我是主角']],
+ [['햇살을 따라 콧노래','Humming in the sunshine','日差しと鼻歌','跟着阳光哼唱'],['가벼운 마음으로','A lighter heart','軽やかな気持ちで','带着轻快心情'],['바람에 실린 웃음','Laughter in the breeze','風に乗る笑い声','风中的笑声'],['반짝이는 산책길','A sparkling stroll','きらめく散歩道','闪亮散步路']],
+ [['방 안의 작은 파티','A little room party','部屋の小さなパーティー','房间里的小派对'],['불빛 아래 춤을','Dance under the lights','灯りの下で踊ろう','在灯光下起舞'],['오늘 밤의 디스코','Tonight’s disco','今夜のディスコ','今晚的迪斯科'],['친구들과 함께','Together with friends','友だちと一緒に','和朋友在一起']],
+ [['마음에 켜진 멜로디','A melody in my heart','心に灯るメロディー','心中亮起的旋律'],['반짝이는 후렴','A sparkling chorus','きらめくサビ','闪亮的副歌'],['너에게 보내는 리듬','A rhythm just for you','君に贈るリズム','送给你的节奏'],['좋은 일이 생길 것 같아','Something good is coming','いいことが起こりそう','好事即将发生']]
 ];
 
 const STYLES={
@@ -39,9 +47,13 @@ const STYLES={
  ambient:{mix:{keys:56,bell:22,piano:12},lead:'bell',stride:2,swing:0,kick:[],snare:[],hat:[]},
  musicbox:{mix:{bell:52,keys:25,piano:15},lead:'bell',stride:1,swing:0,kick:[],snare:[],hat:[]},
  bossa:{mix:{guitar:52,keys:18,bass:32,drums:20},lead:'guitar',stride:1,swing:.04,kick:[0,3,6],snare:[2,5],hat:[0,2,3,4,6,7]},
- mellow:{mix:{piano:40,keys:34,guitar:20,bass:18},lead:'piano',stride:2,swing:.03,kick:[],snare:[],hat:[]}
+ mellow:{mix:{piano:40,keys:34,guitar:20,bass:18},lead:'piano',stride:2,swing:.03,kick:[],snare:[],hat:[]},
+ dance:{mix:{keys:60,piano:24,bass:48,drums:48,bell:16},lead:'keys',stride:1,swing:0,kick:[0,2,4,6],snare:[2,6],hat:[0,1,2,3,4,5,6,7]},
+ disco:{mix:{guitar:54,keys:40,bass:52,drums:44,bell:12},lead:'guitar',stride:1,swing:.04,kick:[0,2,4,6],snare:[2,6],hat:[0,1,2,3,4,5,6,7]},
+ pop:{mix:{piano:52,keys:40,guitar:28,bass:44,drums:40},lead:'piano',stride:1,swing:0,kick:[0,3,4],snare:[2,6],hat:[0,1,2,3,4,5,6,7]},
+ funk:{mix:{guitar:56,keys:28,bass:54,drums:42},lead:'guitar',stride:1,swing:.08,kick:[0,3,4,7],snare:[2,6],hat:[0,1,2,3,4,5,6,7]}
 };
-const PALETTES=[['lofi','jazz','bossa','mellow'],['piano','ambient','lofi','mellow'],['lofi','piano','ambient','musicbox'],['acoustic','bossa','jazz','lofi'],['piano','ambient','acoustic','mellow'],['bossa','mellow','acoustic','piano'],['mellow','acoustic','piano','jazz'],['lofi','ambient','jazz','mellow'],['piano','mellow','musicbox','acoustic'],['acoustic','jazz','bossa','piano'],['ambient','musicbox','mellow','piano'],['musicbox','ambient','mellow','piano']];
+const PALETTES=[['lofi','jazz','bossa','mellow'],['piano','ambient','lofi','mellow'],['lofi','piano','ambient','musicbox'],['acoustic','bossa','jazz','lofi'],['piano','ambient','acoustic','mellow'],['bossa','mellow','acoustic','piano'],['mellow','acoustic','piano','jazz'],['lofi','ambient','jazz','mellow'],['piano','mellow','musicbox','acoustic'],['acoustic','jazz','bossa','piano'],['ambient','musicbox','mellow','piano'],['musicbox','ambient','mellow','piano'],['dance','pop','funk','disco'],['pop','funk','disco','dance'],['disco','dance','funk','pop'],['pop','dance','disco','funk']];
 const PROGRESSIONS=[[0,5,3,4,0,2,3,4],[0,3,5,4,2,5,3,0],[5,3,0,4,5,2,3,4],[0,2,5,3,1,4,0,4],[3,4,2,5,1,4,0,0],[0,5,1,4,3,2,1,4],[5,4,3,0,1,2,4,5],[0,4,5,2,3,0,1,4]];
 const MOTIFS=[[0,null,1,2,null,1,3,2],[2,1,null,0,1,null,4,2],[0,2,4,null,3,2,null,1],[1,null,2,0,null,3,2,4],[4,2,1,null,0,1,null,2],[0,1,null,3,2,null,1,0],[2,null,3,4,null,2,1,0],[0,null,4,2,1,null,3,1],[1,2,3,null,4,2,0,null],[0,3,null,2,4,null,1,2],[4,null,2,3,1,null,0,1],[2,0,1,null,2,4,null,3]];
 export const TRACKS=CATEGORIES.flatMap((category,c)=>TITLES[c].map((title,index)=>{
@@ -74,12 +86,15 @@ export function composeFrame(track,bar,step,brightness=track.brightness,arrangem
   const choice=motif[motifIndex],leadPalette=[chord[0],chord[1],chord[2],chord[3],chord[0]+12,degreeNote(degree+8)];
   const notes=[];
   const quiet=bar%16>=12;
-  if(choice!==null&&step%style.stride===0&&!(quiet&&step%3===1)&&!(arrangement.density==='sparse'&&step%4!==0))notes.push({id:lead,midi:leadPalette[choice]+12,duration:track.style==='ambient'?2.8:track.style==='musicbox'?1.9:1.15,volume:.12+(track.seed%4)*.012});
+  const upbeat=['dance','disco','pop','funk'].includes(track.style);
+  if(choice!==null&&step%style.stride===0&&!(quiet&&step%3===1)&&!(arrangement.density==='sparse'&&step%4!==0))notes.push({id:lead,midi:leadPalette[choice]+12,duration:upbeat?.48:track.style==='ambient'?2.8:track.style==='musicbox'?1.9:1.15,volume:.12+(track.seed%4)*.012});
   if(step===0){
     chord.slice(0,track.style==='jazz'?4:3).forEach((midi,i)=>notes.push({id:'keys',midi,duration:Math.min(5,240/track.tempo*.95),volume:.045,delay:i*.014}));
     notes.push({id:'bass',midi:chord[0]-12,duration:1.1,volume:.21});
   }
   if(step===4)notes.push({id:'bass',midi:chord[2]-12,duration:.8,volume:.14});
+  if(upbeat&&(step===3||step===7))notes.push({id:'bass',midi:chord[step===3?2:0]-12,duration:.36,volume:.16});
+  if(upbeat&&step%2===1&&!quiet)chord.slice(0,3).forEach((midi,i)=>notes.push({id:'keys',midi,duration:.25,volume:.035,delay:i*.006}));
   if(lead!=='guitar'&&step%2===0&&!(arrangement.density==='sparse'&&step===2))notes.push({id:'guitar',midi:chord[(step/2+bar)%3],duration:.7,volume:.09});
   if(lead!=='piano'&&(step===2||step===6))notes.push({id:'piano',midi:chord[step===2?1:2]+12,duration:1.4,volume:.1});
   if(lead!=='bell'&&step===6&&bar%2===1)notes.push({id:'bell',midi:chord[2]+24,duration:2,volume:.07});
