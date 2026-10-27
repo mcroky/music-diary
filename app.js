@@ -51,7 +51,7 @@ async function backupFile(button,data,name,onSuccess){
   finally{button.disabled=false;}
 }
 function showDialog(id){const dialog=$(id);lastFocus.set(dialog,document.activeElement);if(!dialog.open)dialog.showModal();}
-function closeDialog(dialog){if(dialog.id==='immersionDialog'){$('roomChoices').before($('roomScene'));document.body.classList.remove('is-immersed');}if(dialog.id==='albumDialog'){cancelAlbumExport();albumPlayer.stop();}if(dialog.id==='dayExportDialog')cancelDayExport();dialog.close();lastFocus.get(dialog)?.focus();}
+function closeDialog(dialog){if(dialog.id==='immersionDialog'){$('roomChoices').before($('roomScene'));document.body.classList.remove('is-immersed');}if(dialog.id==='albumDialog'){cancelAlbumExport();albumPlayer.stop();}if(dialog.id==='dayExportDialog')cancelDayExport();dialog.close();const previous=lastFocus.get(dialog);if(previous?.isConnected)previous.focus();else if($('musicDialog').open)$('musicDialogClose').focus();}
 function ask(key,accept){$('confirmText').textContent=t(key);$('confirmAccept').textContent=t(accept);showDialog('confirmDialog');return new Promise(resolve=>{confirmResolve=resolve;});}
 function finishConfirm(result){closeDialog($('confirmDialog'));confirmResolve?.(result);confirmResolve=null;}
 async function canLeaveDraft(){if(!dirty||flushDraft())return true;const discard=await ask('draftWarn','discard');if(discard)finishActiveDraft();return discard;}
@@ -190,7 +190,7 @@ function renderTrackCards(){
     const cover=document.createElement('span');cover.className='track-cover';cover.style.setProperty('--cover',category.color);cover.setAttribute('aria-hidden','true');const icon=document.createElement('span');icon.textContent=category.icon;const num=document.createElement('small');num.textContent=String(track.seed+1).padStart(2,'0');cover.append(icon,num);
     const title=document.createElement('strong');title.textContent=localized(track.title,lang);const meta=document.createElement('small');const seconds=Math.round(3840/track.tempo);const duration=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;meta.textContent=`${localized(category.title,lang)} · ${track.tempo} BPM · ${duration} ${t('loopLabel')}`;card.setAttribute('aria-label',`${t('chooseTrack')}: ${localized(track.title,lang)}, ${meta.textContent}`);
     const lockedTrack=Object.hasOwn(SHOP_ITEMS,`track-${track.id}`)&&!owns(`track-${track.id}`)&&track.id!==state.trackId;
-    const action=document.createElement('span');action.className='track-action';action.textContent=lockedTrack?t('shopUnlock'):track.id===state.trackId?`✓ ${t('selectedTrack')}`:t('chooseTrack');if(lockedTrack)card.setAttribute('aria-label',`${localized(track.title,lang)}: ${t('shopUnlock')}`);card.append(cover,title,meta,action);card.addEventListener('click',()=>{if(lockedTrack){renderShop();showDialog('shopDialog');}else selectTrack(track);});return card;
+    const action=document.createElement('span');action.className='track-action';action.textContent=lockedTrack?t('shopUnlock'):track.id===state.trackId?`✓ ${t('selectedTrack')}`:t('chooseTrack');if(lockedTrack)card.setAttribute('aria-label',`${localized(track.title,lang)}: ${t('shopUnlock')}`);card.append(cover,title,meta,action);card.addEventListener('click',()=>{if(lockedTrack){renderShop();showDialog('shopDialog');}else{selectTrack(track,{focus:false});if($('musicDialog').open)closeDialog($('musicDialog'));}});return card;
   });
   if(!cards.length){const empty=document.createElement('p');empty.className='catalog-empty';empty.textContent=t('noTracks');cards.push(empty);}
   $('trackGrid').replaceChildren(...cards);$('catalogCount').textContent=`${tracks.length} / ${TRACKS.length}`;$('moreTracks').hidden=tracks.length<=catalogLimit;
@@ -388,10 +388,10 @@ $('play').addEventListener('click',async()=>{
 });
 for(const id of ['master','tempo'])$(id).addEventListener('input',()=>{state[id]=Number($(id).value);$(`${id}Output`).value=id==='master'?`${state[id]}%`:String(state[id]);setFill($(id));markDirty();audio.update(state);});
 $('brightness').addEventListener('input',()=>{state.brightness=Number($('brightness').value);renderExpression();markDirty();audio.update(state);});
-$('catalogSearch').addEventListener('input',()=>{catalogQuery=$('catalogSearch').value;catalogLimit=8;renderTrackCards();});
+$('catalogSearch').addEventListener('input',()=>{catalogQuery=$('catalogSearch').value;catalogCategory='all';catalogLimit=8;renderCatalog();});
 $('moreTracks').addEventListener('click',()=>{const count=$('trackGrid').children.length;catalogLimit+=8;renderTrackCards();$('trackGrid').children[count]?.focus();});
 $('catalogPlay').addEventListener('click',()=>{if(!$('play').disabled)$('play').click();});
-$('browseMusic').addEventListener('click',()=>{$('catalogDetails').open=true;$('catalogSection').scrollIntoView({block:'start',behavior:'auto'});});
+$('browseMusic').addEventListener('click',()=>{renderCatalog();showDialog('musicDialog');$('musicDialog').scrollTop=0;});
 $('goWrite').addEventListener('click',()=>document.querySelector('.journal-section').scrollIntoView({block:'start',behavior:'auto'}));
 $('enterImmersion').addEventListener('click',()=>{const focus=document.activeElement;$('immersiveStage').append($('roomScene'));document.body.classList.add('is-immersed');showDialog('immersionDialog');lastFocus.set($('immersionDialog'),focus);});
 $('leaveImmersion').addEventListener('click',()=>closeDialog($('immersionDialog')));
@@ -493,7 +493,7 @@ function applyMobileLayout(){
   const actions=$('diaryOptionsMenu'),saveRow=document.querySelector('.save-row'),draftNote=document.querySelector('.draft-note'),volume=document.querySelector('.master-volume');
   if(mobileLayout.matches){studio.after(journal);actions.append($('dayExportOpen'),$('newEntry'),$('deleteEntry'),$('manageDrafts'));document.querySelector('.room-settings').append(volume);}
   else{$('storageError').before(journal);for(const id of ['dayExportOpen','newEntry','deleteEntry'])saveRow.insertBefore($(id),$('diaryOptions'));draftNote.append($('manageDrafts'));document.querySelector('.player').append(volume);document.querySelector('.site-header').classList.remove('menu-open');$('mobileMenu').setAttribute('aria-expanded','false');$('diaryOptions').open=false;}
-  for(const id of ['roomDetails','catalogDetails','arrangementDetails','mixerDetails'])$(id).open=!mobileLayout.matches;
+  for(const id of ['roomDetails','arrangementDetails','mixerDetails'])$(id).open=!mobileLayout.matches;
   updateSave();
 }
 applyMobileLayout();mobileLayout.addEventListener('change',applyMobileLayout);
