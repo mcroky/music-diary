@@ -1,6 +1,6 @@
 import {legacyBrightness} from './music.js';
 import {isTrackId,LEADS,RHYTHMS,DENSITIES,defaultArrangement} from './catalog.js';
-import {emptyWallet,validateWallet,awardLegacyDays} from './rewards.js';
+import {emptyWallet,validateWallet,awardLegacyDays,recognizeEntries} from './rewards.js';
 export const KEY='roky-music-diary.v1';
 export const SOUNDS=['rain','fire','waves','wind','birds','cafe','piano','drums','bass','keys','guitar','bell'];
 export const MOODS=['calm','happy','sad','tired','hopeful','restless'];
@@ -23,18 +23,20 @@ export function validateEntry(e){
 export function parseBackup(raw){
   if(typeof raw!=='string'||raw.length>5_000_000||new TextEncoder().encode(raw).byteLength>5_000_000)throw new Error('INVALID_BACKUP');
   const data=JSON.parse(raw);
-  if(data?.app!=='roky-music-room'||![1,2,3,4,5,6].includes(data.version)||!Array.isArray(data.entries)||data.entries.length>5000)throw new Error('INVALID_BACKUP');
+  if(data?.app!=='roky-music-room'||![1,2,3,4,5,6,7,8].includes(data.version)||!Array.isArray(data.entries)||data.entries.length>5000)throw new Error('INVALID_BACKUP');
   if(data.version>=2&&data.entries.some(e=>!e||e.brightness===undefined))throw new Error('INVALID_BACKUP');
   if(data.version>=3&&data.entries.some(e=>e.trackId===undefined))throw new Error('INVALID_BACKUP');
   if(data.version>=4&&data.entries.some(e=>e.arrangement===undefined))throw new Error('INVALID_BACKUP');
   if(data.version>=5)validateWallet(data.wallet);
   if(data.version===6&&data.wallet.version!==2)throw new Error('INVALID_BACKUP');
+  if(data.version===7&&data.wallet.version!==3)throw new Error('INVALID_BACKUP');
+  if(data.version===8&&data.wallet.version!==4)throw new Error('INVALID_BACKUP');
   const entries=data.entries.map(validateEntry);
   if(new Set(entries.map(e=>e.id)).size!==entries.length)throw new Error('DUPLICATE_ID');
   return entries;
 }
 export function encodeBackup(entries,wallet){
-  const raw=JSON.stringify({app:'roky-music-room',version:wallet===undefined?4:6,exportedAt:new Date().toISOString(),entries:entries.map(validateEntry),...(wallet===undefined?{}:{wallet:validateWallet(wallet)})},null,2);
+  const raw=JSON.stringify({app:'roky-music-room',version:wallet===undefined?4:8,exportedAt:new Date().toISOString(),entries:entries.map(validateEntry),...(wallet===undefined?{}:{wallet:validateWallet(wallet)})},null,2);
   // Never persist a file that our own importer would reject, including UTF-8 size.
   parseBackup(raw);return raw;
 }
@@ -47,6 +49,6 @@ export function readEntries(storage){
   const raw=storage.getItem(KEY);
   return raw===null?[]:parseBackup(raw);
 }
-export function walletFromBackup(raw){const entries=parseBackup(raw),data=JSON.parse(raw);if(data.version<5)return awardLegacyDays(emptyWallet(),entries);const wallet=validateWallet(data.wallet);return data.version===5&&data.wallet.version===1?awardLegacyDays(wallet,entries):wallet;}
+export function walletFromBackup(raw){const entries=parseBackup(raw),data=JSON.parse(raw);let wallet=data.version<5?awardLegacyDays(emptyWallet(),entries):validateWallet(data.wallet);if(data.version===5&&data.wallet.version===1)wallet=awardLegacyDays(wallet,entries);return recognizeEntries(wallet,entries);}
 export function readWallet(storage){const raw=storage.getItem(KEY);return raw===null?emptyWallet():walletFromBackup(raw);}
 export function writeEntries(storage,entries,wallet){if(wallet===undefined){const raw=storage.getItem?.(KEY);if(raw!==null&&raw!==undefined&&JSON.parse(raw).version>=5)wallet=walletFromBackup(raw);}storage.setItem(KEY,encodeBackup(entries,wallet));}

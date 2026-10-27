@@ -1,6 +1,7 @@
 import {RoomAudio} from './audio.js';
+import {connectMediaSession} from './media-session.js';
 import {KEY,SOUNDS,MOODS,ROOMS,LIGHTS,WEATHERS,TIMES,readEntries,readWallet,walletFromBackup,writeEntries,encodeBackup,parseBackup,mergeEntries,validateEntry} from './storage.js';
-import {emptyWallet,awardDays,mergeWallets,walletBalance,purchaseItem,spendDownload,refundDownload,SHOP_ITEMS} from './rewards.js';
+import {emptyWallet,recognizeEntries,awardEntry,mergeWallets,walletBalance,purchaseItem,spendDownload,refundDownload,SHOP_ITEMS} from './rewards.js';
 import {translate,locales} from './translations.js';
 import {musicExpression} from './music.js';
 import {CATEGORIES,TRACKS,getTrack,localized,LEADS,RHYTHMS,DENSITIES,defaultArrangement,trackLead} from './catalog.js';
@@ -25,14 +26,22 @@ let albumDate=new Date(new Date().getFullYear(),new Date().getMonth(),1,12),albu
 let albumExportJob=null,albumExportFeedback='';
 let dayExportJob=null,dayExportFeedback='',wallet=emptyWallet();
 const albumAudio=new RoomAudio();
-const albumPlayer=new AlbumPlayer(albumAudio,{onChange:player=>{if(player.index>=0)albumIndex=player.index;if($('albumDialog')?.open)renderAlbum();},onError:()=>{albumError=true;if($('albumDialog').open)renderAlbum();}});
+const albumPlayer=new AlbumPlayer(albumAudio,{onChange:player=>{if(player.index>=0)albumIndex=player.index;syncMediaSession();if($('albumDialog')?.open)renderAlbum();},onError:()=>{albumError=true;if($('albumDialog').open)renderAlbum();}});
+let mediaTarget='room';
+const mediaSession=connectMediaSession(navigator.mediaSession,{play:async()=>{if(mediaTarget==='album'&&$('albumDialog').open){if(!albumPlayer.playing&&!albumPlayer.loading){const records=albumEntries();if(nextAudible(records,albumIndex)!==-1)await albumPlayer.playFrom(records,albumIndex);}}else await startRoomAudio();},pause:async()=>{if(mediaTarget==='album')await albumPlayer.stop();else await stopAudio();}});
+function syncMediaSession(){
+  const selected=mediaTarget==='album'?albumEntries()[albumIndex]:state;
+  const track=getTrack(selected?.trackId),title=track?localized(track.title,lang):t('customTrack');
+  mediaSession?.update({playing:mediaTarget==='album'?albumPlayer.playing:audio.running,title,artist:t('brand'),album:t('subtitle')});
+}
 let catalogCategory='all',catalogQuery='',catalogLimit=8;
 let draftId=crypto.randomUUID(),draftParent=null,lastDraft=null,draftStatus='idle',draftSavedAt=0,draftTimer,maxDraftTimer,draftFailureNotified=false;
 let draftCatalogue={drafts:[],records:[],invalid:[]},draftReadFailed=false;
-try{entries=readEntries(localStorage);wallet=awardDays(readWallet(localStorage),entries);}catch{locked=true;try{rawOriginal=localStorage.getItem(KEY);}catch{}}
+try{entries=readEntries(localStorage);wallet=recognizeEntries(readWallet(localStorage),entries);}catch{locked=true;try{rawOriginal=localStorage.getItem(KEY);}catch{}}
 const owns=id=>wallet.purchases.includes(id);
+const availableRooms=()=>ROOMS.filter(room=>room!=='greenhouse'||owns('room-greenhouse')||state.room===room);
 function updateWallet(change){
-  const latest=readEntries(localStorage),current=awardDays(readWallet(localStorage),latest),next=change(current);
+  const latest=readEntries(localStorage),current=recognizeEntries(readWallet(localStorage),latest),next=change(current);
   writeEntries(localStorage,latest,next);entries=latest;wallet=next;return next;
 }
 function refreshRewards(){const balance=walletBalance(wallet);if($('rewardBalance'))$('rewardBalance').textContent=String(balance);if($('mobileRewardBalance'))$('mobileRewardBalance').textContent=String(balance);if($('mobileShop'))$('mobileShop').setAttribute('aria-label',`${t('rewardBalance').replace('{count}',balance)} · ${t('shopTitle')}`);if($('shopDialog')?.open)renderShop();}
@@ -126,7 +135,7 @@ function renderMoods(){
 function renderSettings(){
   const field=(id,options)=>{const label=document.createElement('label');label.className='setting-field';const span=document.createElement('span');span.textContent=t(id);const select=document.createElement('select');select.id=`setting-${id}`;select.setAttribute('aria-label',t(id));for(const value of options){const option=new Option(t(value),value);select.add(option);}select.value=state[id];select.addEventListener('change',()=>{state[id]=select.value;markDirty();updateScene();});label.append(span,select);return label;};
   const pair=document.createElement('div');pair.className='setting-pair';pair.append(field('weather',WEATHERS),field('time',TIMES));
-  $('sceneControls').replaceChildren(field('room',ROOMS.filter(room=>room!=='greenhouse'||owns('room-greenhouse')||state.room===room)),field('light',LIGHTS),pair);
+  $('sceneControls').replaceChildren(field('room',availableRooms()),field('light',LIGHTS),pair);
   $('sleepTimer').replaceChildren(...[0,15,30,60].map(v=>new Option(v?`${v} ${t('minutes')}`:t('none'),String(v))));$('sleepTimer').value=String(sleepMinutes);
 }
 function renderSounds(){
@@ -156,13 +165,14 @@ function revealSelectedRoom(){const row=$('roomChoices'),selected=row.querySelec
 function sceneState(status){$('roomScene').dataset.status=status;$('sceneStatusText').textContent=t(status==='error'?'sceneError':'sceneLoading');$('retryScene').hidden=status!=='error';}
 function renderRoomChoices(){
   $('roomChoices').setAttribute('aria-label',t('room'));
-  $('roomChoices').replaceChildren(...ROOMS.filter(room=>room!=='greenhouse'||owns('room-greenhouse')||state.room===room).map(room=>{const button=document.createElement('button');button.className='room-thumbnail';button.dataset.room=room;button.setAttribute('aria-pressed',String(state.room===room));const image=document.createElement('img');image.src=ROOM_ART[room].src;image.alt='';image.loading='lazy';image.decoding='async';const label=document.createElement('span');label.textContent=t(room);button.append(image,label);button.addEventListener('click',()=>chooseRoom(room));return button;}));
+  $('roomChoices').replaceChildren(...availableRooms().map(room=>{const button=document.createElement('button');button.className='room-thumbnail';button.dataset.room=room;button.setAttribute('aria-pressed',String(state.room===room));const image=document.createElement('img');image.src=ROOM_ART[room].src;image.alt='';image.loading='lazy';image.decoding='async';const label=document.createElement('span');label.textContent=t(room);button.append(image,label);button.addEventListener('click',()=>chooseRoom(room));return button;}));
 }
 function chooseRoom(room){state.room=room;$('setting-room').value=room;markDirty();updateScene();}
 function updatePlayer(){
   document.body.classList.toggle('is-playing',audio.running);$('playIcon').textContent=audio.running?'Ⅱ':'▶';$('playLabel').textContent=t(audio.running?'pause':'play');$('playState').textContent=t(audio.running?'playing':'paused');$('play').setAttribute('aria-pressed',String(audio.running));
   $('catalogPlay').textContent=t(audio.running?'pause':'listenTrack');$('catalogPlay').setAttribute('aria-pressed',String(audio.running));
   $('immersionPlay').textContent=t(audio.running?'pause':'play');$('immersionPlay').setAttribute('aria-pressed',String(audio.running));
+  syncMediaSession();
 }
 function renderDateStamp(){const date=new Date(state.date+'T12:00:00');if(!Number.isFinite(date.getTime()))return;$('stampDay').textContent=date.getDate();$('stampMonth').textContent=date.toLocaleDateString(locales[lang],{month:'short',year:'numeric'});$('stampWeekday').textContent=date.toLocaleDateString(locales[lang],{weekday:'long'});}
 function renderDraft(){
@@ -222,7 +232,7 @@ function selectTrack(track,{focus=true,autoplay=false}={}){
   state.trackId=track.id;state.tempo=track.tempo;state.brightness=track.brightness;state.arrangement=defaultArrangement();
   // A composition supplies the instrument mix; the user's room and environmental sounds stay personal.
   for(const id of SOUNDS.slice(6))state.sounds[id]=track.mix[id]||0;
-  renderSounds();renderExpression();$('tempo').value=state.tempo;$('tempoOutput').value=state.tempo;setFill($('tempo'));renderTrackCards();syncArrangement();if(focus)$(`track-${track.id}`)?.focus();markDirty();audio.update(state);toast(audio.running?'trackQueued':autoplay?'trackStarting':'trackSelected');
+  renderSounds();renderExpression();$('tempo').value=state.tempo;$('tempoOutput').value=state.tempo;setFill($('tempo'));renderTrackCards();syncArrangement();syncMediaSession();if(focus)$(`track-${track.id}`)?.focus();markDirty();audio.update(state);toast(audio.running?'trackQueued':autoplay?'trackStarting':'trackSelected');
 }
 function entryCard(entry){
   const button=document.createElement('button');button.className='entry-card';button.setAttribute('aria-label',`${t('openEntry')}: ${entry.title||t('untitled')}, ${entry.date}`);
@@ -383,7 +393,7 @@ async function stopAudio(){clearInterval(timerTick);timerEnd=0;await audio.stop(
 async function startRoomAudio({announce=false}={}){
   if(audio.running||$('play').disabled)return;
   if(!Object.values(state.sounds).some(v=>v>0)){toast('noSounds');return;}
-  $('play').disabled=true;
+  mediaTarget='room';$('play').disabled=true;
   try{await audio.start(state);updatePlayer();restartTimer();if(state.master===0)toast('masterMuted');else if(announce)toast('trackNowPlaying');}catch{await audio.stop();toast('errorAudio');updatePlayer();}finally{$('play').disabled=false;}
 }
 $('play').addEventListener('click',async()=>{
@@ -400,9 +410,9 @@ $('goWrite').addEventListener('click',()=>document.querySelector('.journal-secti
 $('enterImmersion').addEventListener('click',()=>{const focus=document.activeElement;$('immersiveStage').append($('roomScene'));document.body.classList.add('is-immersed');showDialog('immersionDialog');lastFocus.set($('immersionDialog'),focus);});
 $('leaveImmersion').addEventListener('click',()=>closeDialog($('immersionDialog')));
 $('immersionPlay').addEventListener('click',()=>{if(!$('play').disabled)$('play').click();});
-$('nextRoom').addEventListener('click',()=>chooseRoom(ROOMS[(ROOMS.indexOf(state.room)+1)%ROOMS.length]));
+$('nextRoom').addEventListener('click',()=>{const rooms=availableRooms();chooseRoom(rooms[(rooms.indexOf(state.room)+1)%rooms.length]);});
 $('retryScene').addEventListener('click',()=>loadRoomArtwork(state.room,{force:true,onState:sceneState}));
-$('clearTrack').addEventListener('click',()=>{state.trackId=null;state.arrangement=defaultArrangement();renderTrackCards();syncArrangement();markDirty();audio.update(state);});
+$('clearTrack').addEventListener('click',()=>{state.trackId=null;state.arrangement=defaultArrangement();renderTrackCards();syncArrangement();syncMediaSession();markDirty();audio.update(state);});
 $('arrangeStart').addEventListener('click',()=>{selectTrack(TRACKS[0],{focus:false});$('arrangeLead').focus();});
 for(const [field,id]of [['lead','arrangeLead'],['rhythm','arrangeRhythm'],['density','arrangeDensity']])$(id).addEventListener('change',()=>{
   const track=getTrack(state.trackId);if(!track)return;
@@ -434,16 +444,16 @@ $('diaryForm').addEventListener('submit',async event=>{
       safe.id=crypto.randomUUID();latest=readEntries(localStorage);
     }
     const updated=latest.some(e=>e.id===safe.id)?latest.map(e=>e.id===safe.id?safe:e):[...latest,safe];
-    const previousWallet=awardDays(readWallet(localStorage),latest),next=awardDays(previousWallet,updated),earned=next.days.length>previousWallet.days.length;
+    const previousWallet=recognizeEntries(readWallet(localStorage),latest),next=awardEntry(previousWallet,safe.id),earned=next.rewardedEntryIds.length>previousWallet.rewardedEntryIds.length;
     writeEntries(localStorage,updated,next);wallet=next;entries=updated;state=safe;loadedVersion=JSON.stringify(safe);editing=true;dirty=false;finishActiveDraft();updateSave();renderEntries();refreshRewards();toast(earned?'rewardEarned':'saved');
   }catch{toast('errorSave');}
 });
 $('newEntry').addEventListener('click',()=>newDiary());
-$('deleteEntry').addEventListener('click',async()=>{if(locked||!editing||!await ask('deleteAsk','delete'))return;try{const latest=readEntries(localStorage);if(JSON.stringify(latest.find(e=>e.id===state.id))!==loadedVersion){toast('conflict');return;}const updated=latest.filter(e=>e.id!==state.id),next=awardDays(readWallet(localStorage),latest);writeEntries(localStorage,updated,next);wallet=next;entries=updated;dirty=false;finishActiveDraft();await newDiary(state.date);renderEntries();refreshRewards();toast('deleted');}catch{toast('errorSave');}});
+$('deleteEntry').addEventListener('click',async()=>{if(locked||!editing||!await ask('deleteAsk','delete'))return;try{const latest=readEntries(localStorage);if(JSON.stringify(latest.find(e=>e.id===state.id))!==loadedVersion){toast('conflict');return;}const updated=latest.filter(e=>e.id!==state.id),next=recognizeEntries(readWallet(localStorage),latest);writeEntries(localStorage,updated,next);wallet=next;entries=updated;dirty=false;finishActiveDraft();await newDiary(state.date);renderEntries();refreshRewards();toast('deleted');}catch{toast('errorSave');}});
 for(const id of ['calendarNav','calendarMore'])$(id).addEventListener('click',()=>{selectedDay=state.date||localDate();calendarDate=new Date(selectedDay+'T12:00:00');calendarDate.setDate(1);renderCalendar();showDialog('calendarDialog');});
 for(const id of ['albumNav','albumMore'])$(id).addEventListener('click',openAlbum);
 for(const [id,offset]of [['albumPreviousMonth',-1],['albumNextMonth',1]])$(id).addEventListener('click',()=>changeAlbumMonth(offset));
-$('albumPlay').addEventListener('click',async()=>{if(albumPlayer.playing||albumPlayer.loading){albumPlayer.stop();return;}const records=albumEntries();if(nextAudible(records,albumIndex)===-1)return;albumError=false;await stopAudio();if($('albumDialog').open)albumPlayer.playFrom(records,albumIndex);});
+$('albumPlay').addEventListener('click',async()=>{if(albumPlayer.playing||albumPlayer.loading){albumPlayer.stop();return;}const records=albumEntries();if(nextAudible(records,albumIndex)===-1)return;albumError=false;await stopAudio();if($('albumDialog').open){mediaTarget='album';albumPlayer.playFrom(records,albumIndex);}});
 $('albumExportMode').addEventListener('change',()=>{albumExportFeedback='';renderAlbumExport();});
 $('albumExportFormat').addEventListener('change',()=>{albumExportFeedback='';renderAlbumExport();});
 $('albumExport').addEventListener('click',exportAlbum);$('albumExportCancel').addEventListener('click',cancelAlbumExport);
@@ -463,12 +473,12 @@ $('bannerDrafts').addEventListener('click',()=>{refreshDrafts();renderDraftManag
 $('resumeLatestDraft').addEventListener('click',()=>{const source=draftCatalogue.drafts.find(d=>d.id!==draftId);if(source)recoverDraft(source);});
 $('retryDraftSave').addEventListener('click',()=>{draftStatus='pending';flushDraft();});
 $('exportDraftOriginal').addEventListener('click',()=>backupFile($('exportDraftOriginal'),JSON.stringify({app:'roky-music-draft-recovery',exportedAt:new Date().toISOString(),originals:draftCatalogue.invalid},null,2),`roky-draft-originals-${Date.now()}.json`));
-$('export').addEventListener('click',()=>{if(locked){$('rawBackup').click();return;}try{const latest=readEntries(localStorage),current=awardDays(readWallet(localStorage),latest);backupFile($('export'),encodeBackup(latest,current),`roky-music-diary-${localDate()}.json`);}catch{toast('errorLoad');}});
+$('export').addEventListener('click',()=>{if(locked){$('rawBackup').click();return;}try{const latest=readEntries(localStorage),current=recognizeEntries(readWallet(localStorage),latest);backupFile($('export'),encodeBackup(latest,current),`roky-music-diary-${localDate()}.json`);}catch{toast('errorLoad');}});
 $('rawBackup').addEventListener('click',()=>{if(rawOriginal===null){toast('errorLoad');return;}const original=rawOriginal;backupFile($('rawBackup'),original,`roky-original-${Date.now()}.json`,()=>{if(rawOriginal===original)rawDownloaded=true;});});
 $('import').addEventListener('click',()=>{if(locked&&!rawDownloaded){toast('errorLoad');$('storageError').scrollIntoView({behavior:'smooth',block:'center'});return;}$('importFile').click();});
 $('importFile').addEventListener('change',async()=>{
   const file=$('importFile').files[0];if(!file)return;
-  try{if(file.size>5_000_000)throw new Error('TOO_LARGE');const raw=await file.text(),imported=parseBackup(raw),incoming=walletFromBackup(raw),updated=locked?imported:mergeEntries(readEntries(localStorage),imported),current=locked?emptyWallet():readWallet(localStorage),next=awardDays(mergeWallets(current,incoming),updated);writeEntries(localStorage,updated,next);wallet=next;entries=updated;locked=false;updateSave();renderEntries();refreshRewards();renderDraft();toast('imported');}catch(error){toast(error?.name==='QuotaExceededError'||error?.name==='SecurityError'?'errorSave':'invalidBackup');}finally{$('importFile').value='';}
+  try{if(file.size>5_000_000)throw new Error('TOO_LARGE');const raw=await file.text(),imported=parseBackup(raw),incoming=walletFromBackup(raw),updated=locked?imported:mergeEntries(readEntries(localStorage),imported),current=locked?emptyWallet():readWallet(localStorage),next=recognizeEntries(mergeWallets(current,incoming),updated);writeEntries(localStorage,updated,next);wallet=next;entries=updated;locked=false;updateSave();renderEntries();refreshRewards();renderDraft();toast('imported');}catch(error){toast(error?.name==='QuotaExceededError'||error?.name==='SecurityError'?'errorSave':'invalidBackup');}finally{$('importFile').value='';}
 });
 for(const button of document.querySelectorAll('[data-dialog]'))button.addEventListener('click',()=>showDialog(button.dataset.dialog));
 for(const button of document.querySelectorAll('.close-dialog'))button.addEventListener('click',()=>closeDialog(button.closest('dialog')));
@@ -492,7 +502,7 @@ connectAndroid({onPause:pauseAndroid,onBack:async()=>{
 }}).catch(()=>toast('androidConnectionFailed'));
 window.addEventListener('pagehide',()=>{flushDraft();cancelAlbumExport();cancelDayExport();audio.stop();albumPlayer.stop();});
 window.addEventListener('beforeunload',event=>{if(dirty&&!flushDraft()){event.preventDefault();event.returnValue='';}});
-window.addEventListener('storage',event=>{if(event.key?.startsWith(DRAFT_PREFIX)||event.key===null)refreshDrafts();if(event.key!==KEY&&event.key!==null)return;try{entries=readEntries(localStorage);wallet=awardDays(readWallet(localStorage),entries);renderEntries();refreshRewards();renderRoomChoices();renderSettings();renderTrackCards();if($('albumDialog').open)renderAlbum();if($('dayExportDialog').open)renderDayExport();}catch{locked=true;rawOriginal=event.newValue;rawDownloaded=false;updateSave();}});
+window.addEventListener('storage',event=>{if(event.key?.startsWith(DRAFT_PREFIX)||event.key===null)refreshDrafts();if(event.key!==KEY&&event.key!==null)return;try{entries=readEntries(localStorage);wallet=recognizeEntries(readWallet(localStorage),entries);renderEntries();refreshRewards();renderRoomChoices();renderSettings();renderTrackCards();if($('albumDialog').open)renderAlbum();if($('dayExportDialog').open)renderDayExport();}catch{locked=true;rawOriginal=event.newValue;rawDownloaded=false;updateSave();}});
 // Keep the frequently used diary near the room on narrow screens; desktop keeps its original order.
 const mobileLayout=matchMedia('(max-width: 750px)');
 function applyMobileLayout(){

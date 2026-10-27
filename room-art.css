@@ -25,5 +25,8 @@
 @media(prefers-reduced-motion:reduce){.rain-sheet,.snow-sheet,.room-scene[data-light=candle] .scene-lamp-wash{animation:none!important}.painted-room,.scene-hour-wash,.scene-lamp-wash,.window-night,.window-fog,.window-cloud,.window-snow,.window-rain,.window-stars,.window-moon{transition:none!important}}
 
 body.is-immersed{overflow:hidden}.scene-topline .immerse-button:focus-visible{outline-color:#f2d89f}
+/* A modal's top layer is outside body padding; reserve the system bars inside it. */
+#immersionDialog{inset:0;margin:0;padding:var(--app-safe-top) var(--app-safe-right) var(--app-safe-bottom) var(--app-safe-left)}
+.immersion-header>div{flex:1;min-width:0}.immersion-header h2{overflow-wrap:anywhere}.immersion-header .close-dialog{flex:0 0 44px}
 @media(max-width:750px) and (orientation:portrait){.immersive-stage .room-scene{width:100%;height:100%;max-height:100%;aspect-ratio:auto}.immersive-stage .painted-room{object-fit:cover}.immersive-stage .scene-vignette{box-shadow:inset 0 0 65px #10231d55}}
 
