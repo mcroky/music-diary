@@ -4,6 +4,7 @@ import {albumDuration,canHear} from './album.js';
 // Mono 32 kHz PCM avoids codec dependencies and produces a widely playable WAV.
 export const SAMPLE_RATE=32000;
 export const MAX_WAV_BYTES=180_000_044;
+export const MP3_BITRATE=128;
 const modes={full:Infinity,thirty:30000,fifteen:15000};
 export function exportPlan(entries,mode='full'){
   if(!Object.hasOwn(modes,mode))throw new Error('INVALID_EXPORT_MODE');
@@ -11,6 +12,11 @@ export function exportPlan(entries,mode='full'){
   const segments=audible.map(entry=>{const milliseconds=Math.min(albumDuration(entry),modes[mode]);return {entry,frames:Math.round(milliseconds*SAMPLE_RATE/1000)};});
   const frames=segments.reduce((sum,segment)=>sum+segment.frames,0);
   return {segments,frames,bytes:44+frames*2,skipped:entries.length-audible.length};
+}
+export function estimatedBytes(plan,format){
+  if(format==='wav')return plan.bytes;
+  if(format==='mp3')return (Math.ceil(plan.frames/1152)+2)*576;
+  throw new Error('INVALID_EXPORT_FORMAT');
 }
 export function wavHeader(frames,sampleRate=SAMPLE_RATE){
   const dataBytes=frames*2;if(!Number.isSafeInteger(frames)||frames<0||dataBytes>0xffffffff-36)throw new Error('INVALID_WAV_SIZE');
@@ -43,4 +49,30 @@ export async function renderAlbumWav(plan,{signal,onProgress=()=>{},render=rende
     parts.push(pcm16(samples));onProgress(index+1,plan.segments.length);
   }
   checkAbort(signal);return new Blob(parts,{type:'audio/wav'});
+}
+export async function renderAlbumMp3(plan,{signal,onProgress=()=>{},render=renderOfflineEntry,createWorker=()=>new Worker(new URL('./mp3-worker.js',import.meta.url))}={}){
+  if(!plan.segments.length)throw new Error('EMPTY_ALBUM');
+  // Limit the uncompressed processing workload, even though MP3 itself is smaller.
+  if(plan.bytes>MAX_WAV_BYTES)throw new Error('ALBUM_TOO_LARGE');
+  checkAbort(signal);const worker=createWorker(),parts=[];let pending=null;
+  const abort=()=>{worker.terminate();if(pending){const request=pending;pending=null;request.reject(new DOMException('Cancelled','AbortError'));}};
+  signal?.addEventListener('abort',abort,{once:true});
+  worker.onmessage=event=>{if(!pending)return;const request=pending;pending=null;if(event.data?.type==='error')request.reject(new Error(event.data.message||'MP3_ENCODER_FAILED'));else request.resolve(event.data);};
+  worker.onerror=worker.onmessageerror=()=>{if(pending){const request=pending;pending=null;request.reject(new Error('MP3_WORKER_FAILED'));}};
+  function request(type,data={},transfers=[]){
+    checkAbort(signal);return new Promise((resolve,reject)=>{pending={resolve,reject};try{worker.postMessage({type,...data},transfers);}catch(error){pending=null;reject(error);}});
+  }
+  try{
+    if((await request('init')).type!=='ready')throw new Error('MP3_PROTOCOL_ERROR');
+    for(let index=0;index<plan.segments.length;index++){
+      checkAbort(signal);onProgress(index,plan.segments.length);
+      const segment=plan.segments[index],samples=await render(segment.entry,segment.frames);
+      checkAbort(signal);if(samples.length!==segment.frames)throw new Error('RENDER_LENGTH_MISMATCH');
+      const owned=samples.byteOffset===0&&samples.byteLength===samples.buffer.byteLength?samples:samples.slice();
+      const encoded=await request('encode',{samples:owned},[owned.buffer]);if(encoded.type!=='encoded')throw new Error('MP3_PROTOCOL_ERROR');
+      if(encoded.data.length)parts.push(encoded.data);onProgress(index+1,plan.segments.length);
+    }
+    checkAbort(signal);const last=await request('finish');if(last.type!=='finished')throw new Error('MP3_PROTOCOL_ERROR');if(last.data.length)parts.push(last.data);
+    checkAbort(signal);return new Blob(parts,{type:'audio/mpeg'});
+  }finally{signal?.removeEventListener('abort',abort);worker.terminate();}
 }

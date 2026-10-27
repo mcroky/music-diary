@@ -6,7 +6,7 @@ import {CATEGORIES,TRACKS,getTrack,localized,LEADS,RHYTHMS,DENSITIES,defaultArra
 import {ROOM_ART,loadRoomArtwork} from './room-art.js';
 import {DRAFT_PREFIX,DRAFT_POINTER,parseDraft,readDrafts,writeDraft,removeDraftBranch} from './drafts.js';
 import {entriesForMonth,albumSummary,canHear,nextAudible,AlbumPlayer} from './album.js';
-import {exportPlan,renderAlbumWav,MAX_WAV_BYTES,SAMPLE_RATE} from './album-export.js';
+import {exportPlan,estimatedBytes,renderAlbumWav,renderAlbumMp3,MAX_WAV_BYTES,SAMPLE_RATE} from './album-export.js';
 const $=id=>document.getElementById(id);
 const face={calm:'◡',happy:'☺',sad:'☂',tired:'☾',hopeful:'✧',restless:'〰'};
 const icons={rain:'☂',fire:'♨',waves:'≋',wind:'〰',birds:'♧',cafe:'☕',piano:'♩',drums:'◉',bass:'♪',keys:'▥',guitar:'♬',bell:'♧'};
@@ -239,12 +239,12 @@ function renderCalendar(){
 }
 function albumEntries(){return entriesForMonth(entries,albumDate.getFullYear(),albumDate.getMonth());}
 function renderAlbumExport(records=albumEntries()){
-  const mode=$('albumExportMode').value,plan=exportPlan(records,mode),supported=Boolean(globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext),job=albumExportJob;
-  const seconds=Math.round(plan.frames/SAMPLE_RATE),duration=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`,size=(plan.bytes/1_000_000).toFixed(1);
+  const mode=$('albumExportMode').value,format=$('albumExportFormat').value,plan=exportPlan(records,mode),supported=Boolean(globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext)&&(format==='wav'||(typeof Worker==='function'&&typeof WebAssembly==='object')),job=albumExportJob;
+  const seconds=Math.round(plan.frames/SAMPLE_RATE),duration=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`,size=(estimatedBytes(plan,format)/1_000_000).toFixed(1);
   let estimate=t('albumExportEstimate').replace('{count}',plan.segments.length).replace('{duration}',duration).replace('{size}',size);
   if(plan.skipped)estimate+=` ${t('albumExportSkipped').replace('{count}',plan.skipped)}`;
   $('albumExportEstimate').textContent=estimate;
-  $('albumExportMode').disabled=Boolean(job);$('albumExport').disabled=Boolean(job)||!supported||!plan.segments.length||plan.bytes>MAX_WAV_BYTES;
+  $('albumExportMode').disabled=Boolean(job);$('albumExportFormat').disabled=Boolean(job);$('albumExport').disabled=Boolean(job)||!supported||!plan.segments.length||plan.bytes>MAX_WAV_BYTES;
   $('albumExportCancel').hidden=!job;$('albumExportCancel').disabled=Boolean(job?.controller.signal.aborted);
   $('albumExportProgress').setAttribute('aria-label',t('albumExportTitle'));$('albumExportProgress').hidden=!job;if(job){$('albumExportProgress').max=job.total;$('albumExportProgress').value=job.done;}
   let status=job?(job.controller.signal.aborted?t('albumExportCancelling'):t('albumExportWorking').replace('{done}',job.done).replace('{total}',job.total)):
@@ -254,13 +254,14 @@ function renderAlbumExport(records=albumEntries()){
 function cancelAlbumExport(){if(!albumExportJob)return;albumExportJob.controller.abort();if($('albumDialog').open)renderAlbumExport();}
 async function exportAlbum(){
   if(albumExportJob)return;
-  const records=structuredClone(albumEntries()),plan=exportPlan(records,$('albumExportMode').value);
-  if(!plan.segments.length||plan.bytes>MAX_WAV_BYTES||!(globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext))return;
-  const filename=`roky-music-album-${String(albumDate.getFullYear()).padStart(4,'0')}-${String(albumDate.getMonth()+1).padStart(2,'0')}.wav`;
+  const records=structuredClone(albumEntries()),format=$('albumExportFormat').value,plan=exportPlan(records,$('albumExportMode').value);
+  if(!plan.segments.length||plan.bytes>MAX_WAV_BYTES||!(globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext)||(format==='mp3'&&(typeof Worker!=='function'||typeof WebAssembly!=='object')))return;
+  const filename=`roky-music-album-${String(albumDate.getFullYear()).padStart(4,'0')}-${String(albumDate.getMonth()+1).padStart(2,'0')}.${format}`;
   const job={controller:new AbortController(),done:0,total:plan.segments.length};albumExportJob=job;albumExportFeedback='';renderAlbum();$('albumExportCancel').focus();
   try{
     await albumPlayer.stop();
-    const blob=await renderAlbumWav(plan,{signal:job.controller.signal,onProgress:(done,total)=>{job.done=done;job.total=total;if($('albumDialog').open)renderAlbumExport();}});
+    const render=format==='mp3'?renderAlbumMp3:renderAlbumWav;
+    const blob=await render(plan,{signal:job.controller.signal,onProgress:(done,total)=>{job.done=done;job.total=total;if($('albumDialog').open)renderAlbumExport();}});
     if(job.controller.signal.aborted)throw new DOMException('Cancelled','AbortError');
     downloadAudio(blob,filename);albumExportFeedback='albumExportDone';
   }catch(error){albumExportFeedback=error?.name==='AbortError'?'albumExportCancelled':'albumExportFailed';}
@@ -377,6 +378,7 @@ for(const id of ['albumNav','albumMore'])$(id).addEventListener('click',openAlbu
 for(const [id,offset]of [['albumPreviousMonth',-1],['albumNextMonth',1]])$(id).addEventListener('click',()=>changeAlbumMonth(offset));
 $('albumPlay').addEventListener('click',async()=>{if(albumPlayer.playing||albumPlayer.loading){albumPlayer.stop();return;}const records=albumEntries();if(nextAudible(records,albumIndex)===-1)return;albumError=false;await stopAudio();if($('albumDialog').open)albumPlayer.playFrom(records,albumIndex);});
 $('albumExportMode').addEventListener('change',()=>{albumExportFeedback='';renderAlbumExport();});
+$('albumExportFormat').addEventListener('change',()=>{albumExportFeedback='';renderAlbumExport();});
 $('albumExport').addEventListener('click',exportAlbum);$('albumExportCancel').addEventListener('click',cancelAlbumExport);
 $('todayNav').addEventListener('click',()=>window.scrollTo({top:0,behavior:'auto'}));
 for(const [id,offset]of [['prevMonth',-1],['nextMonth',1]])$(id).addEventListener('click',()=>{calendarDate.setMonth(calendarDate.getMonth()+offset);renderCalendar();});

@@ -1,0 +1,13 @@
+MP3 encoding uses wasm-media-encoders 0.7.0 by arseneyr.
+The unmodified JavaScript wrapper is provided under the MIT license; see LICENSE-MIT.txt.
+
+The unmodified mp3.wasm contains LAME, distributed under the GNU Library General Public License version 2; see LICENSE-LAME.txt and LAME-NOTICE.txt. LAME project: https://lame.sourceforge.io/
+
+Corresponding wrapper and build scripts: https://github.com/arseneyr/wasm-media-encoders/tree/v0.7.0
+Corresponding LAME source: https://github.com/arseneyr/lame/tree/98db548e8e851defbba3184125ce10725355c332
+Official package: https://registry.npmjs.org/wasm-media-encoders/-/wasm-media-encoders-0.7.0.tgz
+Package SHA-512 (base64): Sp4wUasgxOK/IFfNhpon6LQQgYGwtpxyV4isjGIe1rvhnJL3w2KYr4f+CdqDNtGPDcgCDRY+uBanVfSx6Si0WQ==
+JavaScript SHA-256: DD4E17ABF5377DFECC726D6EC5E7B72DAB01CF3522974278E5347F4E68480FB3
+WASM SHA-256: 85E81719250B9A667B1258143F689DDA70E3E57A7E7C29AB0B4CEF65C8F6EB9A
+
+The application supplies the WASM URL from its own origin and never uses the encoder's default CDN URLs.
