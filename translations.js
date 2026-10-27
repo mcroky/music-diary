@@ -1,5 +1,7 @@
 export const locales={ko:'ko-KR',en:'en-US',ja:'ja-JP',zh:'zh-CN'};
 const rows={
+ releaseSimpleMobile:['2026.10.27 · 모바일 첫 화면과 일기 작성 화면을 더 간결하게 정리했어요.','2026.10.27 · A simpler mobile home and diary screen.','2026.10.27 · モバイルのホームと日記画面をよりシンプルにしました。','2026.10.27 · 简化手机首页与日记界面。'],
+ mobileMenu:['메뉴','Menu','メニュー','菜单'],moreActions:['더보기','More','その他','更多'],mobileSave:['일기 저장','Save diary','日記を保存','保存日记'],mobileUpdate:['변경 저장','Save changes','変更を保存','保存更改'],
  roomControls:['방과 분위기 조절','Room & mood settings','部屋と雰囲気の設定','房间与氛围设置'],writeShortcut:['일기 쓰기','Write diary','日記を書く','写日记'],releaseMobile:['2026.10.27 · 모바일에서 방과 일기 작성에 집중할 수 있도록 화면을 간결하게 정리했어요.','2026.10.27 · A simpler mobile layout brings your room and diary to the front.','2026.10.27 · モバイル画面を整理し、部屋と日記を使いやすくしました。','2026.10.27 · 简化手机界面，方便使用房间和日记。'],
  dayExportDone:['하루 음악 다운로드를 시작했어요.','Your daily music download has started.','この日の音楽をダウンロードしています。','当天音乐已开始下载。'],
  shopTitle:['음표 상점','Note shop','音符ショップ','音符商店'],
